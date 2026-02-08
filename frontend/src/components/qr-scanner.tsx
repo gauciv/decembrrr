@@ -10,6 +10,7 @@ export default function QrScanner({ onScan, onError }: QrScannerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const hasScanned = useRef(false);
+  const isRunning = useRef(false);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -25,6 +26,7 @@ export default function QrScanner({ onScan, onError }: QrScannerProps) {
         (decodedText) => {
           if (hasScanned.current) return;
           hasScanned.current = true;
+          isRunning.current = false;
           scanner
             .stop()
             .then(() => onScan(decodedText))
@@ -32,15 +34,19 @@ export default function QrScanner({ onScan, onError }: QrScannerProps) {
         },
         () => {}
       )
+      .then(() => {
+        isRunning.current = true;
+      })
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
         onError?.(msg);
       });
 
     return () => {
-      scanner
-        .stop()
-        .catch(() => {});
+      if (isRunning.current) {
+        isRunning.current = false;
+        scanner.stop().catch(() => {});
+      }
     };
   }, [onScan, onError]);
 
