@@ -72,7 +72,7 @@ export default function PaymentsPage() {
     }
   }
 
-  if (profile?.role !== "president") {
+  if (!profile?.is_president) {
     return (
       <Card>
         <CardContent className="py-8 text-center text-muted-foreground">

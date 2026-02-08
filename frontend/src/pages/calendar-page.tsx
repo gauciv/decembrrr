@@ -30,7 +30,7 @@ export default function CalendarPage() {
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const isPresident = profile?.role === "president";
+  const isPresident = profile?.is_president ?? false;
 
   const loadDates = useCallback(async () => {
     if (!profile?.class_id) return;

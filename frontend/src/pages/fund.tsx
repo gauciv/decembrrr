@@ -56,7 +56,7 @@ export default function FundPage() {
     getClassMembers(profile.class_id).then(setMembers);
     getClassFundSummary(profile.class_id).then(setSummary);
     getMyClass(profile.class_id).then(setClassData);
-    if (profile.role === "president") {
+    if (profile.is_president) {
       getClassTransactions(profile.class_id, 20).then(setRecentTxns);
     }
   }, [profile]);
@@ -86,7 +86,7 @@ export default function FundPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Total Class Fund
             </CardTitle>
-            {profile.role === "president" && (
+            {profile.is_president && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -168,7 +168,7 @@ export default function FundPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">
                   {member.name}
-                  {member.role === "president" && (
+                  {member.is_president && (
                     <span className="ml-1 text-xs text-muted-foreground">
                       (President)
                     </span>
@@ -187,7 +187,7 @@ export default function FundPage() {
       </Card>
 
       {/* Recent Transactions (president only) */}
-      {profile.role === "president" && recentTxns.length > 0 && (
+      {profile.is_president && recentTxns.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Recent Class Activity</CardTitle>
