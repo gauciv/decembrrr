@@ -8,3 +8,5 @@ dist/
 .terraform.lock.hcl
 *.zip
 .temp
+terraform.tfvars
+.terraform.tfstate.lock.info
