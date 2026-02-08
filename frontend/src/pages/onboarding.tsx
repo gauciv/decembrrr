@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,9 @@ import {
 } from "@/components/ui/card";
 import { createClass, joinClass } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
-import { QrCode } from "lucide-react";
+import { Camera, Upload } from "lucide-react";
+
+const QrScanner = lazy(() => import("@/components/qr-scanner"));
 
 /** Strips non-digits and re-formats with commas: 20000 → 20,000 */
 function formatWithCommas(value: string): string {
@@ -27,6 +30,7 @@ function parseFormattedNumber(value: string): number {
 
 export default function OnboardingPage() {
   const { refreshProfile, signOut } = useAuth();
+  const navigate = useNavigate();
   const [mode, setMode] = useState<"choose" | "create" | "join">("choose");
 
   // Create form state
@@ -37,6 +41,7 @@ export default function OnboardingPage() {
 
   // Join form state
   const [inviteCode, setInviteCode] = useState("");
+  const [showScanner, setShowScanner] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -74,6 +79,35 @@ export default function OnboardingPage() {
     }
   }
 
+  function extractCodeFromScan(text: string): string {
+    try {
+      const url = new URL(text);
+      return url.searchParams.get("code") ?? text;
+    } catch {
+      return text;
+    }
+  }
+
+  function handleQrScan(decodedText: string) {
+    const code = extractCodeFromScan(decodedText);
+    setInviteCode(code.toUpperCase());
+    setShowScanner(false);
+  }
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      const scanner = new Html5Qrcode("qr-upload-region");
+      const result = await scanner.scanFile(file, true);
+      const code = extractCodeFromScan(result);
+      setInviteCode(code.toUpperCase());
+    } catch {
+      setError("Could not read QR code from image. Try another photo.");
+    }
+  }
+
   return (
     <div className="flex min-h-svh items-center justify-center bg-gradient-to-br from-red-50 to-green-50 p-4">
       <Card className="w-full max-w-sm">
@@ -107,20 +141,15 @@ export default function OnboardingPage() {
                 variant="outline"
                 onClick={() => setMode("join")}
               >
-                Join with Invite Code
+                Join Class
               </Button>
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">or</span>
-                </div>
-              </div>
-              <p className="text-sm text-muted-foreground text-center flex items-center justify-center gap-1.5">
-                <QrCode className="h-4 w-4" />
-                Scan the QR code from your president to join instantly
-              </p>
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground text-sm"
+                onClick={() => navigate("/")}
+              >
+                Skip for now
+              </Button>
               <Button
                 variant="ghost"
                 className="w-full text-muted-foreground text-sm"
@@ -241,12 +270,83 @@ export default function OnboardingPage() {
               >
                 {loading ? "Joining…" : "Join Class"}
               </Button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">
+                    or scan QR
+                  </span>
+                </div>
+              </div>
+
+              {showScanner ? (
+                <div className="space-y-2">
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center py-8">
+                        <p className="text-sm text-muted-foreground">
+                          Opening camera…
+                        </p>
+                      </div>
+                    }
+                  >
+                    <QrScanner
+                      onScan={handleQrScan}
+                      onError={() =>
+                        setError("Camera access denied. Try uploading a QR image instead.")
+                      }
+                    />
+                  </Suspense>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => setShowScanner(false)}
+                  >
+                    Close camera
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setError("");
+                      setShowScanner(true);
+                    }}
+                  >
+                    <Camera className="h-4 w-4 mr-1.5" />
+                    Scan QR
+                  </Button>
+                  <Button variant="outline" className="flex-1" asChild>
+                    <label className="cursor-pointer">
+                      <Upload className="h-4 w-4 mr-1.5" />
+                      Upload QR
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageUpload}
+                      />
+                    </label>
+                  </Button>
+                </div>
+              )}
+
+              {/* Hidden element for QR image scanning */}
+              <div id="qr-upload-region" className="hidden" />
+
               <Button
                 variant="ghost"
                 className="w-full"
                 onClick={() => {
                   setMode("choose");
                   setError("");
+                  setShowScanner(false);
                 }}
               >
                 Back
