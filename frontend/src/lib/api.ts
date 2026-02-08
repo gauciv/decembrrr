@@ -250,3 +250,50 @@ export async function getClassFundSummary(classId: string) {
 
   return { totalBalance, activeCount, totalMembers, inDebt };
 }
+
+// --- CSV Export ---
+
+/** Build a CSV string of all class transactions and trigger download */
+export async function exportTransactionsCsv(classId: string) {
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*, profiles:profile_id(name, email)")
+    .eq("class_id", classId)
+    .order("created_at", { ascending: false });
+  if (error) throw resolveError(error);
+
+  const header = "Date,Student,Email,Type,Amount,Balance Before,Balance After,Note";
+  const rows = (data as Array<{
+    created_at: string;
+    profiles: { name: string; email: string } | null;
+    type: string;
+    amount: number;
+    balance_before: number;
+    balance_after: number;
+    note: string | null;
+  }>).map((t) => {
+    const date = new Date(t.created_at).toLocaleString("en-PH");
+    const name = t.profiles?.name ?? "Unknown";
+    const email = t.profiles?.email ?? "";
+    const escapeCsv = (s: string) => `"${s.replace(/"/g, '""')}"`;
+    return [
+      escapeCsv(date),
+      escapeCsv(name),
+      escapeCsv(email),
+      t.type,
+      t.amount.toFixed(2),
+      t.balance_before.toFixed(2),
+      t.balance_after.toFixed(2),
+      escapeCsv(t.note ?? ""),
+    ].join(",");
+  });
+
+  const csv = [header, ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `decembrrr-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}

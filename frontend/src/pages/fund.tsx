@@ -4,6 +4,9 @@ import {
   getClassMembers,
   getClassFundSummary,
   getClassTransactions,
+  getMyClass,
+  exportTransactionsCsv,
+  type ClassData,
 } from "@/lib/api";
 import type { Profile } from "@/context/auth";
 import {
@@ -14,7 +17,9 @@ import {
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Download, Users, UserCheck, AlertTriangle, Target } from "lucide-react";
 
 interface TransactionWithProfile {
   id: string;
@@ -25,9 +30,18 @@ interface TransactionWithProfile {
   profiles: { name: string };
 }
 
+function initials(name: string) {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2);
+}
+
 export default function FundPage() {
   const { profile } = useAuth();
   const [members, setMembers] = useState<Profile[]>([]);
+  const [classData, setClassData] = useState<ClassData | null>(null);
   const [summary, setSummary] = useState({
     totalBalance: 0,
     activeCount: 0,
@@ -35,11 +49,13 @@ export default function FundPage() {
     inDebt: 0,
   });
   const [recentTxns, setRecentTxns] = useState<TransactionWithProfile[]>([]);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (!profile?.class_id) return;
     getClassMembers(profile.class_id).then(setMembers);
     getClassFundSummary(profile.class_id).then(setSummary);
+    getMyClass(profile.class_id).then(setClassData);
     if (profile.role === "president") {
       getClassTransactions(profile.class_id, 20).then(setRecentTxns);
     }
@@ -47,40 +63,87 @@ export default function FundPage() {
 
   if (!profile?.class_id) return null;
 
+  async function handleExport() {
+    if (!profile?.class_id) return;
+    setExporting(true);
+    try {
+      await exportTransactionsCsv(profile.class_id);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const goalProgress = classData?.fund_goal
+    ? Math.min(100, (summary.totalBalance / classData.fund_goal) * 100)
+    : null;
+
   return (
     <div className="space-y-6">
       {/* Fund Summary */}
       <Card className="border-blue-200 bg-blue-50">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Total Class Fund
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total Class Fund
+            </CardTitle>
+            {profile.role === "president" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleExport}
+                disabled={exporting}
+                className="text-blue-700 hover:text-blue-800"
+              >
+                <Download className="h-4 w-4 mr-1" />
+                {exporting ? "Exporting…" : "CSV"}
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <p className="text-4xl font-bold text-blue-700">
-            ₱{summary.totalBalance.toFixed(2)}
+            ₱{summary.totalBalance.toLocaleString("en-PH", {
+              minimumFractionDigits: 2,
+            })}
           </p>
-          <p className="text-sm text-muted-foreground mt-1">
-            This should match your physical cash on hand
-          </p>
+          {classData?.fund_goal && goalProgress !== null && (
+            <div className="mt-3">
+              <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                <span className="flex items-center gap-1">
+                  <Target className="h-3 w-3" />
+                  {goalProgress.toFixed(0)}% of goal
+                </span>
+                <span>₱{classData.fund_goal.toLocaleString("en-PH")}</span>
+              </div>
+              <div className="h-2 rounded-full bg-blue-200">
+                <div
+                  className="h-2 rounded-full bg-blue-600 transition-all"
+                  style={{ width: `${goalProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-3 gap-3">
         <Card>
-          <CardContent className="pt-6 text-center">
+          <CardContent className="pt-5 text-center">
+            <Users className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
             <p className="text-xl font-bold">{summary.totalMembers}</p>
             <p className="text-xs text-muted-foreground">Members</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6 text-center">
+          <CardContent className="pt-5 text-center">
+            <UserCheck className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
             <p className="text-xl font-bold">{summary.activeCount}</p>
             <p className="text-xs text-muted-foreground">Active</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6 text-center">
+          <CardContent className="pt-5 text-center">
+            <AlertTriangle className="h-4 w-4 mx-auto mb-1 text-red-500" />
             <p className="text-xl font-bold text-red-600">{summary.inDebt}</p>
             <p className="text-xs text-muted-foreground">In Debt</p>
           </CardContent>
@@ -100,13 +163,7 @@ export default function FundPage() {
             >
               <Avatar className="h-8 w-8">
                 <AvatarImage src={member.avatar_url || undefined} />
-                <AvatarFallback>
-                  {member.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .slice(0, 2)}
-                </AvatarFallback>
+                <AvatarFallback>{initials(member.name)}</AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">
