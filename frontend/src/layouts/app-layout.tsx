@@ -12,37 +12,34 @@ import {
 import { Separator } from "@/components/ui/separator";
 import {
   LayoutDashboard,
-  Wallet,
-  HandCoins,
-  CalendarOff,
   LogOut,
   Copy,
   ChevronRight,
   Receipt,
   Users,
+  Plus,
+  BarChart3,
+  CalendarOff,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { getMyClass, type ClassData } from "@/lib/api";
 import { useEffect } from "react";
+
+const ScanFlow = lazy(() => import("@/components/president/scan-flow"));
 
 interface NavItem {
   to: string;
   label: string;
   icon: LucideIcon;
-  /** Only show for presidents */
   presidentOnly?: boolean;
-  /** Only show for students */
   studentOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
   { to: "/", label: "Home", icon: LayoutDashboard },
-  /* President-only tabs */
-  { to: "/fund", label: "Fund", icon: Wallet, presidentOnly: true },
-  { to: "/payments", label: "Collect", icon: HandCoins, presidentOnly: true },
-  { to: "/calendar", label: "Exempt", icon: CalendarOff, presidentOnly: true },
-  /* Student-only tabs */
+  { to: "/class-list", label: "Class", icon: Users, presidentOnly: true },
+  { to: "/analytics", label: "Stats", icon: BarChart3, presidentOnly: true },
   { to: "/transactions", label: "Log", icon: Receipt, studentOnly: true },
   { to: "/class", label: "Class", icon: Users, studentOnly: true },
 ];
@@ -61,6 +58,7 @@ export default function AppLayout() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [classData, setClassData] = useState<ClassData | null>(null);
   const [copied, setCopied] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
 
   useEffect(() => {
     if (profile?.class_id) {
@@ -70,7 +68,7 @@ export default function AppLayout() {
 
   if (!profile) return null;
 
-  const isPresident = profile.role === "president";
+  const isPresident = profile.is_president;
   const visibleNav = navItems.filter((item) => {
     if (item.presidentOnly && !isPresident) return false;
     if (item.studentOnly && isPresident) return false;
@@ -83,6 +81,11 @@ export default function AppLayout() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
+
+  const presidentLeft = visibleNav.filter(
+    (i) => i.to === "/" || i.to === "/class-list"
+  );
+  const presidentRight = visibleNav.filter((i) => i.to === "/analytics");
 
   return (
     <div className="flex min-h-svh flex-col bg-background">
@@ -113,7 +116,6 @@ export default function AppLayout() {
                 <SheetTitle>Account</SheetTitle>
               </SheetHeader>
               <div className="mt-6 space-y-5">
-                {/* Profile card */}
                 <div className="flex items-center gap-3">
                   <Avatar className="h-12 w-12">
                     <AvatarImage src={profile.avatar_url || undefined} />
@@ -129,7 +131,6 @@ export default function AppLayout() {
 
                 <Separator />
 
-                {/* Class info */}
                 {classData && (
                   <div className="space-y-3">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -141,12 +142,15 @@ export default function AppLayout() {
                           {classData.name}
                         </span>
                         <span className="text-xs capitalize bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                          {profile.role}
+                          {isPresident ? "President" : "Member"}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">
-                          ₱{classData.daily_amount}/{classData.collection_frequency === "weekly" ? "week" : "day"}
+                          ₱{classData.daily_amount}/
+                          {classData.collection_frequency === "weekly"
+                            ? "week"
+                            : "day"}
                         </span>
                         {classData.fund_goal && (
                           <span className="text-muted-foreground">
@@ -154,7 +158,6 @@ export default function AppLayout() {
                           </span>
                         )}
                       </div>
-                      {/* Invite code */}
                       <button
                         onClick={copyInviteCode}
                         className="flex w-full items-center justify-between rounded-md bg-muted p-2 text-sm hover:bg-muted/80 transition-colors"
@@ -163,14 +166,21 @@ export default function AppLayout() {
                           {classData.invite_code}
                         </span>
                         <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          {copied ? "Copied!" : <><Copy className="h-3 w-3" /> Copy</>}
+                          {copied ? (
+                            "Copied!"
+                          ) : (
+                            <>
+                              <Copy className="h-3 w-3" /> Copy
+                            </>
+                          )}
                         </span>
                       </button>
-                      {/* QR code for invite link (president only) */}
                       {isPresident && (
                         <div className="flex flex-col items-center pt-2">
                           <img
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`${window.location.origin}/join?code=${classData.invite_code}`)}`}
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
+                              `${window.location.origin}/join?code=${classData.invite_code}`
+                            )}`}
                             alt="QR code to join class"
                             className="h-32 w-32 rounded-md"
                           />
@@ -185,8 +195,7 @@ export default function AppLayout() {
 
                 <Separator />
 
-                {/* Quick links */}
-                {profile.role === "president" && (
+                {isPresident && (
                   <div className="space-y-1">
                     <button
                       onClick={() => {
@@ -228,28 +237,87 @@ export default function AppLayout() {
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/80 backdrop-blur-sm">
         <div className="flex h-16 items-center justify-around">
-          {visibleNav.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === "/"}
-                className={({ isActive }) =>
-                  `flex flex-col items-center gap-1 px-3 py-2 text-xs transition-colors ${
-                    isActive
-                      ? "text-foreground font-medium"
-                      : "text-muted-foreground"
-                  }`
-                }
+          {isPresident ? (
+            <>
+              {presidentLeft.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === "/"}
+                    className={({ isActive }) =>
+                      `flex flex-col items-center gap-1 px-3 py-2 text-xs transition-colors ${
+                        isActive
+                          ? "text-foreground font-medium"
+                          : "text-muted-foreground"
+                      }`
+                    }
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span>{item.label}</span>
+                  </NavLink>
+                );
+              })}
+
+              <button
+                onClick={() => setScanOpen(true)}
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg -mt-5 hover:bg-primary/90 transition-colors"
+                aria-label="Scan QR code"
               >
-                <Icon className="h-5 w-5" />
-                <span>{item.label}</span>
-              </NavLink>
-            );
-          })}
+                <Plus className="h-6 w-6" />
+              </button>
+
+              {presidentRight.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) =>
+                      `flex flex-col items-center gap-1 px-3 py-2 text-xs transition-colors ${
+                        isActive
+                          ? "text-foreground font-medium"
+                          : "text-muted-foreground"
+                      }`
+                    }
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span>{item.label}</span>
+                  </NavLink>
+                );
+              })}
+            </>
+          ) : (
+            visibleNav.map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === "/"}
+                  className={({ isActive }) =>
+                    `flex flex-col items-center gap-1 px-3 py-2 text-xs transition-colors ${
+                      isActive
+                        ? "text-foreground font-medium"
+                        : "text-muted-foreground"
+                    }`
+                  }
+                >
+                  <Icon className="h-5 w-5" />
+                  <span>{item.label}</span>
+                </NavLink>
+              );
+            })
+          )}
         </div>
       </nav>
+
+      {isPresident && (
+        <Suspense>
+          <ScanFlow open={scanOpen} onOpenChange={setScanOpen} />
+        </Suspense>
+      )}
     </div>
   );
 }
