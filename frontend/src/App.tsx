@@ -11,6 +11,7 @@ const LoginPage = lazy(() => import("@/pages/login"));
 const OnboardingPage = lazy(() => import("@/pages/onboarding"));
 const DashboardPage = lazy(() => import("@/pages/dashboard"));
 const PresidentClassPage = lazy(() => import("@/pages/president-class"));
+const PresidentWalletPage = lazy(() => import("@/pages/president-wallet"));
 const PresidentAnalyticsPage = lazy(() => import("@/pages/president-analytics"));
 const CalendarPage = lazy(() => import("@/pages/calendar-page"));
 const StudentTransactionsPage = lazy(() => import("@/pages/student-transactions"));
@@ -76,6 +77,7 @@ function AppRoutes() {
           <Route path="/" element={<DashboardPage />} />
           {/* President routes */}
           <Route path="/class-list" element={<PresidentClassPage />} />
+          <Route path="/wallet" element={<PresidentWalletPage />} />
           <Route path="/analytics" element={<PresidentAnalyticsPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           {/* Student routes */}

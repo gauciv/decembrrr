@@ -19,6 +19,7 @@ import {
   Users,
   Plus,
   BarChart3,
+  Wallet,
   CalendarOff,
   type LucideIcon,
 } from "lucide-react";
@@ -39,6 +40,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { to: "/", label: "Home", icon: LayoutDashboard },
   { to: "/class-list", label: "Class", icon: Users, presidentOnly: true },
+  { to: "/wallet", label: "Wallet", icon: Wallet, presidentOnly: true },
   { to: "/analytics", label: "Stats", icon: BarChart3, presidentOnly: true },
   { to: "/transactions", label: "Log", icon: Receipt, studentOnly: true },
   { to: "/class", label: "Class", icon: Users, studentOnly: true },
@@ -85,7 +87,9 @@ export default function AppLayout() {
   const presidentLeft = visibleNav.filter(
     (i) => i.to === "/" || i.to === "/class-list"
   );
-  const presidentRight = visibleNav.filter((i) => i.to === "/analytics");
+  const presidentRight = visibleNav.filter(
+    (i) => i.to === "/wallet" || i.to === "/analytics"
+  );
 
   return (
     <div className="flex min-h-svh flex-col bg-background">
