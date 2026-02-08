@@ -7,3 +7,4 @@ dist/
 *.tfstate.backup
 .terraform.lock.hcl
 *.zip
+.temp
