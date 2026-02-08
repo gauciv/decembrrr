@@ -549,6 +549,189 @@ export async function getStudentById(studentId: string, classId: string) {
   return data as { id: string; name: string; avatar_url: string | null; balance: number; is_active: boolean };
 }
 
+// --- Wallet / Fund Details ---
+
+export interface WalletSummary {
+  totalBalance: number;
+  totalDeposits: number;
+  totalDeductions: number;
+  activeMembers: number;
+  totalMembers: number;
+  inDebt: number;
+  memberBalances: Array<{
+    id: string;
+    name: string;
+    avatar_url: string | null;
+    email: string;
+    balance: number;
+    is_active: boolean;
+  }>;
+}
+
+/** Full wallet summary for the president Wallet tab */
+export async function getWalletSummary(classId: string): Promise<WalletSummary> {
+  const [membersResult, depositsResult, deductionsResult] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, name, avatar_url, email, balance, is_active")
+      .eq("class_id", classId)
+      .order("name"),
+    supabase
+      .from("transactions")
+      .select("amount")
+      .eq("class_id", classId)
+      .eq("type", "deposit"),
+    supabase
+      .from("transactions")
+      .select("amount")
+      .eq("class_id", classId)
+      .eq("type", "deduction"),
+  ]);
+
+  if (membersResult.error) throw resolveError(membersResult.error);
+  if (depositsResult.error) throw resolveError(depositsResult.error);
+  if (deductionsResult.error) throw resolveError(deductionsResult.error);
+
+  type MemberRow = { id: string; name: string; avatar_url: string | null; email: string; balance: number; is_active: boolean };
+  const members = membersResult.data as MemberRow[];
+  const totalDeposits = (depositsResult.data as Array<{ amount: number }>).reduce((s, t) => s + t.amount, 0);
+  const totalDeductions = (deductionsResult.data as Array<{ amount: number }>).reduce((s, t) => s + t.amount, 0);
+
+  return {
+    totalBalance: members.reduce((s, m) => s + m.balance, 0),
+    totalDeposits,
+    totalDeductions,
+    activeMembers: members.filter((m) => m.is_active).length,
+    totalMembers: members.length,
+    inDebt: members.filter((m) => m.balance < 0).length,
+    memberBalances: members,
+  };
+}
+
+// --- Student Payment Stats (for email) ---
+
+export interface StudentPaymentStats {
+  studentName: string;
+  studentEmail: string;
+  totalExpectedDays: number;
+  totalDeposits: number;
+  totalDeductions: number;
+  missedDays: number;
+  completionPercent: number;
+  currentBalance: number;
+  transactions: Transaction[];
+}
+
+/** Calculate a student's full payment stats for email summary */
+export async function getStudentPaymentStats(
+  profileId: string,
+  classId: string,
+): Promise<StudentPaymentStats> {
+  const [studentResult, classResult, txnsResult, noClassResult] = await Promise.all([
+    supabase.from("profiles").select("name, email, balance").eq("id", profileId).single(),
+    supabase.from("classes").select("created_at, daily_amount").eq("id", classId).single(),
+    supabase
+      .from("transactions")
+      .select("*")
+      .eq("profile_id", profileId)
+      .eq("class_id", classId)
+      .order("created_at", { ascending: false }),
+    supabase.from("no_class_dates").select("date").eq("class_id", classId),
+  ]);
+
+  if (studentResult.error) throw resolveError(studentResult.error);
+  if (classResult.error) throw resolveError(classResult.error);
+  if (txnsResult.error) throw resolveError(txnsResult.error);
+  if (noClassResult.error) throw resolveError(noClassResult.error);
+
+  const student = studentResult.data as { name: string; email: string; balance: number };
+  const classInfo = classResult.data as { created_at: string; daily_amount: number };
+  const txns = txnsResult.data as Transaction[];
+  const noClassDates = new Set(
+    (noClassResult.data as Array<{ date: string }>).map((d) => d.date)
+  );
+
+  // Count weekdays from class creation to today, excluding no-class dates + weekends
+  const startDate = new Date(classInfo.created_at);
+  startDate.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let totalExpectedDays = 0;
+  const cursor = new Date(startDate);
+  while (cursor <= today) {
+    const day = cursor.getDay();
+    const dateStr = cursor.toISOString().slice(0, 10);
+    if (day !== 0 && day !== 6 && !noClassDates.has(dateStr)) {
+      totalExpectedDays++;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  const totalDeposits = txns.filter((t) => t.type === "deposit").length;
+  const totalDeductions = txns.filter((t) => t.type === "deduction").length;
+  const missedDays = Math.max(0, totalExpectedDays - totalDeposits);
+  const completionPercent =
+    totalExpectedDays > 0 ? Math.round((totalDeposits / totalExpectedDays) * 100) : 100;
+
+  return {
+    studentName: student.name,
+    studentEmail: student.email,
+    totalExpectedDays,
+    totalDeposits,
+    totalDeductions,
+    missedDays,
+    completionPercent,
+    currentBalance: student.balance,
+    transactions: txns,
+  };
+}
+
+/** Build a mailto: URI with pre-filled payment stats email */
+export function buildStudentEmailUri(stats: StudentPaymentStats, className: string): string {
+  const subject = `Decembrrr – Payment Summary for ${className}`;
+
+  const depositAmt = stats.transactions
+    .filter((t) => t.type === "deposit")
+    .reduce((s, t) => s + t.amount, 0);
+  const deductionAmt = stats.transactions
+    .filter((t) => t.type === "deduction")
+    .reduce((s, t) => s + t.amount, 0);
+
+  let body = `Hi ${stats.studentName},\n\n`;
+  body += `Here's your payment summary for ${className}:\n\n`;
+  body += `────────────────────────\n`;
+  body += `📊 PAYMENT STATS\n`;
+  body += `────────────────────────\n`;
+  body += `Total expected payment days: ${stats.totalExpectedDays}\n`;
+  body += `Payments completed: ${stats.totalDeposits}/${stats.totalExpectedDays} (${stats.completionPercent}%)\n`;
+  body += `Days missed: ${stats.missedDays}\n`;
+  body += `Current balance: ₱${stats.currentBalance.toFixed(2)}\n`;
+  body += `Total deposited: ₱${depositAmt.toFixed(2)}\n`;
+  body += `Total deducted: ₱${deductionAmt.toFixed(2)}\n\n`;
+  body += `────────────────────────\n`;
+  body += `📝 TRANSACTION LOG\n`;
+  body += `────────────────────────\n`;
+
+  const recentTxns = stats.transactions.slice(0, 50);
+  for (const txn of recentTxns) {
+    const date = new Date(txn.created_at).toLocaleDateString("en-PH", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    const sign = txn.type === "deposit" ? "+" : "-";
+    body += `${date}  ${sign}₱${txn.amount.toFixed(2)}  ${txn.note || txn.type}  (bal: ₱${txn.balance_after.toFixed(2)})\n`;
+  }
+  if (stats.transactions.length > 50) {
+    body += `… and ${stats.transactions.length - 50} more\n`;
+  }
+
+  body += `\n— Sent via Decembrrr 🎄`;
+
+  return `mailto:${encodeURIComponent(stats.studentEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
 /** Get a student's transaction dates for the payment calendar view */
 export async function getMyTransactionDates(
   profileId: string,
