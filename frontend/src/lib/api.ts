@@ -18,6 +18,8 @@ export interface ClassData {
   id: string;
   name: string;
   daily_amount: number;
+  fund_goal: number | null;
+  collection_frequency: "daily" | "weekly";
   invite_code: string;
   president_id: string;
   created_at: string;
@@ -33,7 +35,14 @@ export interface NoClassDate {
 
 // --- Classes ---
 
-export async function createClass(name: string, dailyAmount = 10) {
+export interface CreateClassInput {
+  name: string;
+  dailyAmount?: number;
+  fundGoal?: number | null;
+  collectionFrequency?: "daily" | "weekly";
+}
+
+export async function createClass(input: CreateClassInput) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -41,7 +50,13 @@ export async function createClass(name: string, dailyAmount = 10) {
 
   const { data, error } = await supabase
     .from("classes")
-    .insert({ name, daily_amount: dailyAmount, president_id: user.id })
+    .insert({
+      name: input.name,
+      daily_amount: input.dailyAmount ?? 10,
+      fund_goal: input.fundGoal ?? null,
+      collection_frequency: input.collectionFrequency ?? "daily",
+      president_id: user.id,
+    })
     .select()
     .single();
   if (error) throw new AppError(ErrorCode.CLASS_CREATE_FAILED, error.message);
