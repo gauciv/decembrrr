@@ -32,6 +32,8 @@ Mobile-first PWA for tracking daily ₱10 Christmas party fund contributions.
 - [x] PWA manifest
 - [x] Code-split bundle (lazy routes + vendor chunks)
 - [x] CI/CD: GitHub Actions deploys frontend on push to main
+- [x] Error handling: error codes, config guard, error boundary, error screen
+- [ ] Google OAuth provider setup in Supabase
 - [ ] Deployment & testing
 
 ## Deployed Infrastructure
@@ -43,3 +45,19 @@ Mobile-first PWA for tracking daily ₱10 Christmas party fund contributions.
 GitHub Actions workflow at `.github/workflows/deploy-frontend.yml`.
 Triggers on push to `main` when files in `frontend/` change.
 Required repo secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
+
+## Error Handling
+All errors use `AppError` with typed error codes (ERR_XXXX). Categories:
+- **1xxx** — Config/Env (missing Supabase URL/key, unreachable)
+- **2xxx** — Auth (not authenticated, session expired, OAuth failure, profile missing)
+- **3xxx** — Class (not found, invalid invite, already member, create failed)
+- **4xxx** — Payment (student not found, invalid amount, record failed, not president)
+- **5xxx** — Calendar (date exists, save failed)
+- **9xxx** — Generic (network error, unknown)
+
+Key files:
+- `frontend/src/lib/errors.ts` — ErrorCode constants, AppError class, resolveError()
+- `frontend/src/lib/supabase.ts` — Config validation + lazy Proxy client
+- `frontend/src/components/error-boundary.tsx` — React ErrorBoundary (catches render errors)
+- `frontend/src/components/error-screen.tsx` — User-facing error UI with troubleshooting steps
+- `frontend/src/App.tsx` — ConfigGuard wraps app, shows ErrorScreen if .env is missing

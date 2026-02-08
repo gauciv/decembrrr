@@ -2,6 +2,9 @@ import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "@/context/auth";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { ErrorScreen } from "@/components/error-screen";
+import { checkSupabaseConfig } from "@/lib/supabase";
 import AppLayout from "@/layouts/app-layout";
 
 const LoginPage = lazy(() => import("@/pages/login"));
@@ -12,6 +15,18 @@ const FundPage = lazy(() => import("@/pages/fund"));
 const CalendarPage = lazy(() => import("@/pages/calendar-page"));
 
 const queryClient = new QueryClient();
+
+/**
+ * Validates Supabase env vars before rendering the app.
+ * Shows a helpful error screen with setup instructions if .env is missing.
+ */
+function ConfigGuard({ children }: { children: React.ReactNode }) {
+  const status = checkSupabaseConfig();
+  if (!status.ok) {
+    return <ErrorScreen error={status.error} />;
+  }
+  return <>{children}</>;
+}
 
 function AppRoutes() {
   const { user, profile, loading } = useAuth();
@@ -47,12 +62,16 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <ConfigGuard>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </AuthProvider>
+        </QueryClientProvider>
+      </ConfigGuard>
+    </ErrorBoundary>
   );
 }

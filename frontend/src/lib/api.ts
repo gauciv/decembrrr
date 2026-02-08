@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { AppError, ErrorCode, resolveError } from "@/lib/errors";
 import type { Profile } from "@/context/auth";
 
 export interface Transaction {
@@ -36,14 +37,14 @@ export async function createClass(name: string, dailyAmount = 10) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  if (!user) throw new AppError(ErrorCode.AUTH_NOT_AUTHENTICATED);
 
   const { data, error } = await supabase
     .from("classes")
     .insert({ name, daily_amount: dailyAmount, president_id: user.id })
     .select()
     .single();
-  if (error) throw error;
+  if (error) throw new AppError(ErrorCode.CLASS_CREATE_FAILED, error.message);
 
   await supabase
     .from("profiles")
@@ -59,7 +60,7 @@ export async function getMyClass(classId: string) {
     .select("*")
     .eq("id", classId)
     .single();
-  if (error) throw error;
+  if (error) throw new AppError(ErrorCode.CLASS_NOT_FOUND, error.message);
   return data as ClassData;
 }
 
@@ -69,18 +70,18 @@ export async function joinClass(inviteCode: string) {
     .select("*")
     .eq("invite_code", inviteCode.toUpperCase())
     .single();
-  if (findError || !classData) throw new Error("Invalid invite code");
+  if (findError || !classData) throw new AppError(ErrorCode.CLASS_INVITE_INVALID);
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  if (!user) throw new AppError(ErrorCode.AUTH_NOT_AUTHENTICATED);
 
   const { error } = await supabase
     .from("profiles")
     .update({ class_id: classData.id })
     .eq("id", user.id);
-  if (error) throw error;
+  if (error) throw resolveError(error);
 
   return classData as ClassData;
 }
@@ -93,7 +94,7 @@ export async function getClassMembers(classId: string) {
     .select("*")
     .eq("class_id", classId)
     .order("name");
-  if (error) throw error;
+  if (error) throw resolveError(error);
   return data as Profile[];
 }
 
@@ -105,7 +106,7 @@ export async function toggleStudentActive(
     .from("profiles")
     .update({ is_active: isActive })
     .eq("id", studentId);
-  if (error) throw error;
+  if (error) throw resolveError(error);
 }
 
 // --- Payments ---
@@ -121,7 +122,10 @@ export async function recordDeposit(
     .select("balance")
     .eq("id", studentId)
     .single();
-  if (fetchErr || !student) throw new Error("Student not found");
+  if (fetchErr || !student)
+    throw new AppError(ErrorCode.PAYMENT_STUDENT_NOT_FOUND);
+
+  if (amount <= 0) throw new AppError(ErrorCode.PAYMENT_INVALID_AMOUNT);
 
   const balanceBefore = student.balance;
   const balanceAfter = balanceBefore + amount;
@@ -140,13 +144,15 @@ export async function recordDeposit(
     note: note || "Cash payment",
     created_by: user?.id,
   });
-  if (txnErr) throw txnErr;
+  if (txnErr)
+    throw new AppError(ErrorCode.PAYMENT_RECORD_FAILED, txnErr.message);
 
   const { error: updateErr } = await supabase
     .from("profiles")
     .update({ balance: balanceAfter })
     .eq("id", studentId);
-  if (updateErr) throw updateErr;
+  if (updateErr)
+    throw new AppError(ErrorCode.PAYMENT_RECORD_FAILED, updateErr.message);
 
   return { balanceBefore, balanceAfter };
 }
@@ -160,7 +166,7 @@ export async function getMyTransactions(profileId: string, limit = 50) {
     .eq("profile_id", profileId)
     .order("created_at", { ascending: false })
     .limit(limit);
-  if (error) throw error;
+  if (error) throw resolveError(error);
   return data as Transaction[];
 }
 
@@ -171,7 +177,7 @@ export async function getClassTransactions(classId: string, limit = 100) {
     .eq("class_id", classId)
     .order("created_at", { ascending: false })
     .limit(limit);
-  if (error) throw error;
+  if (error) throw resolveError(error);
   return data;
 }
 
@@ -183,7 +189,7 @@ export async function getNoClassDates(classId: string) {
     .select("*")
     .eq("class_id", classId)
     .order("date");
-  if (error) throw error;
+  if (error) throw resolveError(error);
   return data as NoClassDate[];
 }
 
@@ -201,7 +207,7 @@ export async function addNoClassDate(
     .insert({ class_id: classId, date, reason, created_by: user?.id })
     .select()
     .single();
-  if (error) throw error;
+  if (error) throw resolveError(error);
   return data as NoClassDate;
 }
 
@@ -210,7 +216,7 @@ export async function removeNoClassDate(dateId: string) {
     .from("no_class_dates")
     .delete()
     .eq("id", dateId);
-  if (error) throw error;
+  if (error) throw resolveError(error);
 }
 
 // --- Audit ---
@@ -220,7 +226,7 @@ export async function getClassFundSummary(classId: string) {
     .from("profiles")
     .select("balance, is_active")
     .eq("class_id", classId);
-  if (error) throw error;
+  if (error) throw resolveError(error);
 
   const totalBalance = members.reduce((sum, m) => sum + m.balance, 0);
   const activeCount = members.filter((m) => m.is_active).length;

@@ -7,6 +7,7 @@ import {
 } from "react";
 import type { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { AppError, ErrorCode, resolveError } from "@/lib/errors";
 
 interface Profile {
   id: string;
@@ -24,6 +25,7 @@ interface AuthContextValue {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
+  error: AppError | null;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -36,14 +38,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<AppError | null>(null);
 
   async function fetchProfile(userId: string) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
-    setProfile(data);
+    try {
+      const { data, error: fetchErr } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+
+      if (fetchErr) {
+        console.error(`[${ErrorCode.AUTH_PROFILE_NOT_FOUND}] Profile fetch failed:`, fetchErr.message);
+        setError(new AppError(ErrorCode.AUTH_PROFILE_NOT_FOUND, fetchErr.message));
+        setProfile(null);
+        return;
+      }
+      setProfile(data);
+      setError(null);
+    } catch (err) {
+      const appErr = resolveError(err);
+      console.error(`[${appErr.code}] Profile fetch error:`, appErr.message);
+      setError(appErr);
+      setProfile(null);
+    }
   }
 
   async function refreshProfile() {
@@ -75,17 +93,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function signInWithGoogle() {
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin,
-      },
-    });
+    try {
+      const { error: oauthErr } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: window.location.origin,
+        },
+      });
+      if (oauthErr) throw oauthErr;
+    } catch (err) {
+      const appErr = resolveError(err);
+      console.error(`[${appErr.code}] Google sign-in failed:`, appErr.message);
+      setError(appErr);
+    }
   }
 
   async function signOut() {
     await supabase.auth.signOut();
     setProfile(null);
+    setError(null);
   }
 
   return (
@@ -95,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         profile,
         loading,
+        error,
         signInWithGoogle,
         signOut,
         refreshProfile,
