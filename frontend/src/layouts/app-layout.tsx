@@ -18,6 +18,8 @@ import {
   LogOut,
   Copy,
   ChevronRight,
+  Receipt,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -28,14 +30,21 @@ interface NavItem {
   to: string;
   label: string;
   icon: LucideIcon;
+  /** Only show for presidents */
   presidentOnly?: boolean;
+  /** Only show for students */
+  studentOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
   { to: "/", label: "Home", icon: LayoutDashboard },
-  { to: "/fund", label: "Fund", icon: Wallet },
+  /* President-only tabs */
+  { to: "/fund", label: "Fund", icon: Wallet, presidentOnly: true },
   { to: "/payments", label: "Collect", icon: HandCoins, presidentOnly: true },
-  { to: "/calendar", label: "Exempt", icon: CalendarOff },
+  { to: "/calendar", label: "Exempt", icon: CalendarOff, presidentOnly: true },
+  /* Student-only tabs */
+  { to: "/transactions", label: "Log", icon: Receipt, studentOnly: true },
+  { to: "/class", label: "Class", icon: Users, studentOnly: true },
 ];
 
 function initials(name: string) {
@@ -61,9 +70,12 @@ export default function AppLayout() {
 
   if (!profile) return null;
 
-  const visibleNav = navItems.filter(
-    (item) => !item.presidentOnly || profile.role === "president"
-  );
+  const isPresident = profile.role === "president";
+  const visibleNav = navItems.filter((item) => {
+    if (item.presidentOnly && !isPresident) return false;
+    if (item.studentOnly && isPresident) return false;
+    return true;
+  });
 
   function copyInviteCode() {
     if (!classData?.invite_code) return;
@@ -154,6 +166,19 @@ export default function AppLayout() {
                           {copied ? "Copied!" : <><Copy className="h-3 w-3" /> Copy</>}
                         </span>
                       </button>
+                      {/* QR code for invite link (president only) */}
+                      {isPresident && (
+                        <div className="flex flex-col items-center pt-2">
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`${window.location.origin}/join?code=${classData.invite_code}`)}`}
+                            alt="QR code to join class"
+                            className="h-32 w-32 rounded-md"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1.5">
+                            Students can scan to join
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

@@ -13,6 +13,9 @@ const DashboardPage = lazy(() => import("@/pages/dashboard"));
 const PaymentsPage = lazy(() => import("@/pages/payments"));
 const FundPage = lazy(() => import("@/pages/fund"));
 const CalendarPage = lazy(() => import("@/pages/calendar-page"));
+const StudentTransactionsPage = lazy(() => import("@/pages/student-transactions"));
+const StudentClassPage = lazy(() => import("@/pages/student-class"));
+const JoinPage = lazy(() => import("@/pages/join"));
 
 const queryClient = new QueryClient();
 
@@ -42,17 +45,42 @@ function AppRoutes() {
     );
   }
 
-  if (!user) return <Suspense><LoginPage /></Suspense>;
-  if (!profile?.class_id) return <Suspense><OnboardingPage /></Suspense>;
+  if (!user) {
+    /* Allow /join to render even when not signed in — it will redirect to login */
+    return (
+      <Suspense>
+        <Routes>
+          <Route path="/join" element={<JoinPage />} />
+          <Route path="*" element={<LoginPage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
+  /* /join route is accessible before the student has a class */
+  if (!profile?.class_id) {
+    return (
+      <Suspense>
+        <Routes>
+          <Route path="/join" element={<JoinPage />} />
+          <Route path="*" element={<OnboardingPage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
 
   return (
     <Suspense>
       <Routes>
         <Route element={<AppLayout />}>
           <Route path="/" element={<DashboardPage />} />
+          {/* President-only routes */}
           <Route path="/payments" element={<PaymentsPage />} />
           <Route path="/fund" element={<FundPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
+          {/* Student-only routes */}
+          <Route path="/transactions" element={<StudentTransactionsPage />} />
+          <Route path="/class" element={<StudentClassPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { createClass, joinClass } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
+import { QrCode } from "lucide-react";
 
 /** Strips non-digits and re-formats with commas: 20000 → 20,000 */
 function formatWithCommas(value: string): string {
@@ -108,6 +109,18 @@ export default function OnboardingPage() {
               >
                 Join with Invite Code
               </Button>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">or</span>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground text-center flex items-center justify-center gap-1.5">
+                <QrCode className="h-4 w-4" />
+                Scan the QR code from your president to join instantly
+              </p>
               <Button
                 variant="ghost"
                 className="w-full text-muted-foreground text-sm"
