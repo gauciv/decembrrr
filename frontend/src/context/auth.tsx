@@ -14,7 +14,7 @@ interface Profile {
   email: string;
   name: string;
   avatar_url: string | null;
-  role: "student" | "president";
+  is_president: boolean;
   class_id: string | null;
   balance: number;
   is_active: boolean;

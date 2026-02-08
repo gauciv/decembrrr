@@ -63,7 +63,7 @@ export async function createClass(input: CreateClassInput) {
 
   await supabase
     .from("profiles")
-    .update({ class_id: data.id, role: "president" })
+    .update({ class_id: data.id, is_president: true })
     .eq("id", user.id);
 
   return data as ClassData;
@@ -398,6 +398,155 @@ export async function getClassTodayStatus(classId: string) {
   return (membersResult.data as Array<{ id: string; name: string; avatar_url: string | null }>).map(
     (m) => ({ ...m, paidToday: paidIds.has(m.id) })
   );
+}
+
+/** Get today's deduction status for all class members (president Home tab) */
+export async function getClassDeductionStatus(classId: string) {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [membersResult, deductionResult] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, name, avatar_url, balance")
+      .eq("class_id", classId)
+      .eq("is_active", true)
+      .order("name"),
+    supabase
+      .from("transactions")
+      .select("profile_id")
+      .eq("class_id", classId)
+      .eq("type", "deduction")
+      .gte("created_at", `${today}T00:00:00`)
+      .lte("created_at", `${today}T23:59:59`),
+  ]);
+
+  if (membersResult.error) throw resolveError(membersResult.error);
+  if (deductionResult.error) throw resolveError(deductionResult.error);
+
+  const deductedIds = new Set(
+    (deductionResult.data as Array<{ profile_id: string }>).map((t) => t.profile_id)
+  );
+
+  type Member = { id: string; name: string; avatar_url: string | null; balance: number };
+  return (membersResult.data as Member[]).map((m) => ({
+    ...m,
+    deductedToday: deductedIds.has(m.id),
+  }));
+}
+
+/** Weekly deposit analytics for a class (current week vs last week) */
+export async function getWeeklyAnalytics(classId: string) {
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+
+  const thisMonday = new Date(now);
+  thisMonday.setDate(now.getDate() + mondayOffset);
+  thisMonday.setHours(0, 0, 0, 0);
+
+  const lastMonday = new Date(thisMonday);
+  lastMonday.setDate(thisMonday.getDate() - 7);
+
+  const thisMondayStr = thisMonday.toISOString().slice(0, 10);
+  const lastMondayStr = lastMonday.toISOString().slice(0, 10);
+  const todayStr = now.toISOString().slice(0, 10);
+
+  const [thisWeekResult, lastWeekResult, membersResult] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("amount, created_at")
+      .eq("class_id", classId)
+      .eq("type", "deposit")
+      .gte("created_at", `${thisMondayStr}T00:00:00`)
+      .lte("created_at", `${todayStr}T23:59:59`),
+    supabase
+      .from("transactions")
+      .select("amount, created_at")
+      .eq("class_id", classId)
+      .eq("type", "deposit")
+      .gte("created_at", `${lastMondayStr}T00:00:00`)
+      .lt("created_at", `${thisMondayStr}T00:00:00`),
+    supabase
+      .from("profiles")
+      .select("id")
+      .eq("class_id", classId)
+      .eq("is_active", true),
+  ]);
+
+  if (thisWeekResult.error) throw resolveError(thisWeekResult.error);
+  if (lastWeekResult.error) throw resolveError(lastWeekResult.error);
+  if (membersResult.error) throw resolveError(membersResult.error);
+
+  type TxnRow = { amount: number; created_at: string };
+  const thisWeekTotal = (thisWeekResult.data as TxnRow[]).reduce((s, t) => s + t.amount, 0);
+  const lastWeekTotal = (lastWeekResult.data as TxnRow[]).reduce((s, t) => s + t.amount, 0);
+  const thisWeekCount = thisWeekResult.data.length;
+  const lastWeekCount = lastWeekResult.data.length;
+  const activeMembers = membersResult.data.length;
+
+  return {
+    thisWeekTotal,
+    lastWeekTotal,
+    thisWeekCount,
+    lastWeekCount,
+    activeMembers,
+    weekStartDate: thisMondayStr,
+  };
+}
+
+/** Calendar heatmap data: daily deposit percentage for a given month */
+export async function getMonthlyHeatmap(classId: string, year: number, month: number) {
+  const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+  const endDate =
+    month === 12
+      ? `${year + 1}-01-01`
+      : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+
+  const [txnsResult, membersResult] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("profile_id, created_at")
+      .eq("class_id", classId)
+      .eq("type", "deposit")
+      .gte("created_at", startDate)
+      .lt("created_at", endDate),
+    supabase
+      .from("profiles")
+      .select("id")
+      .eq("class_id", classId)
+      .eq("is_active", true),
+  ]);
+
+  if (txnsResult.error) throw resolveError(txnsResult.error);
+  if (membersResult.error) throw resolveError(membersResult.error);
+
+  const totalMembers = membersResult.data.length;
+  const dailyPayers = new Map<string, Set<string>>();
+
+  for (const txn of txnsResult.data as Array<{ profile_id: string; created_at: string }>) {
+    const dateKey = txn.created_at.slice(0, 10);
+    if (!dailyPayers.has(dateKey)) dailyPayers.set(dateKey, new Set());
+    dailyPayers.get(dateKey)!.add(txn.profile_id);
+  }
+
+  const heatmap = new Map<string, number>();
+  for (const [date, payers] of dailyPayers) {
+    heatmap.set(date, totalMembers > 0 ? Math.round((payers.size / totalMembers) * 100) : 0);
+  }
+
+  return { heatmap, totalMembers };
+}
+
+/** Look up a student by their profile ID (for QR scan) */
+export async function getStudentById(studentId: string, classId: string) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, name, avatar_url, balance, is_active")
+    .eq("id", studentId)
+    .eq("class_id", classId)
+    .single();
+  if (error) throw new AppError(ErrorCode.PAYMENT_STUDENT_NOT_FOUND);
+  return data as { id: string; name: string; avatar_url: string | null; balance: number; is_active: boolean };
 }
 
 /** Get a student's transaction dates for the payment calendar view */
