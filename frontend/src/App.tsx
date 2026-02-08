@@ -10,8 +10,8 @@ import AppLayout from "@/layouts/app-layout";
 const LoginPage = lazy(() => import("@/pages/login"));
 const OnboardingPage = lazy(() => import("@/pages/onboarding"));
 const DashboardPage = lazy(() => import("@/pages/dashboard"));
-const PaymentsPage = lazy(() => import("@/pages/payments"));
-const FundPage = lazy(() => import("@/pages/fund"));
+const PresidentClassPage = lazy(() => import("@/pages/president-class"));
+const PresidentAnalyticsPage = lazy(() => import("@/pages/president-analytics"));
 const CalendarPage = lazy(() => import("@/pages/calendar-page"));
 const StudentTransactionsPage = lazy(() => import("@/pages/student-transactions"));
 const StudentClassPage = lazy(() => import("@/pages/student-class"));
@@ -74,11 +74,11 @@ function AppRoutes() {
       <Routes>
         <Route element={<AppLayout />}>
           <Route path="/" element={<DashboardPage />} />
-          {/* President-only routes */}
-          <Route path="/payments" element={<PaymentsPage />} />
-          <Route path="/fund" element={<FundPage />} />
+          {/* President routes */}
+          <Route path="/class-list" element={<PresidentClassPage />} />
+          <Route path="/analytics" element={<PresidentAnalyticsPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
-          {/* Student-only routes */}
+          {/* Student routes */}
           <Route path="/transactions" element={<StudentTransactionsPage />} />
           <Route path="/class" element={<StudentClassPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
