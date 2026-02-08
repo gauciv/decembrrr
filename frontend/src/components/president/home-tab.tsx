@@ -8,7 +8,7 @@ import {
 } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Target, Users, CheckCircle2, Clock } from "lucide-react";
+import { Target, Users, CheckCircle2, XCircle } from "lucide-react";
 
 interface MemberDeductionStatus {
   id: string;
@@ -26,6 +26,27 @@ function initials(name: string) {
     .slice(0, 2);
 }
 
+function balanceColor(balance: number): string {
+  if (balance <= 0) return "text-red-600";
+  if (balance < 50) return "text-amber-500";
+  return "text-green-600";
+}
+
+function balanceDot(balance: number): string {
+  if (balance <= 0) return "bg-red-500";
+  if (balance < 50) return "bg-amber-400";
+  return "bg-green-500";
+}
+
+function formatToday(): string {
+  return new Date().toLocaleDateString("en-PH", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export default function PresidentHomeTab() {
   const { profile } = useAuth();
   const [classData, setClassData] = useState<ClassData | null>(null);
@@ -36,8 +57,8 @@ export default function PresidentHomeTab() {
     inDebt: 0,
   });
   const [members, setMembers] = useState<MemberDeductionStatus[]>([]);
-  const [activeTab, setActiveTab] = useState<"deducted" | "not-deducted">(
-    "not-deducted"
+  const [activeTab, setActiveTab] = useState<"missed" | "contributed">(
+    "missed"
   );
 
   const loadData = useCallback(async () => {
@@ -62,12 +83,15 @@ export default function PresidentHomeTab() {
     ? Math.min(100, (summary.totalBalance / classData.fund_goal) * 100)
     : null;
 
-  const deducted = members.filter((m) => m.deductedToday);
-  const notDeducted = members.filter((m) => !m.deductedToday);
-  const displayList = activeTab === "deducted" ? deducted : notDeducted;
+  const contributed = members.filter((m) => m.deductedToday);
+  const missed = members.filter((m) => !m.deductedToday);
+  const displayList = activeTab === "contributed" ? contributed : missed;
 
   return (
     <div className="space-y-4">
+      {/* Date Stamp */}
+      <p className="text-sm text-muted-foreground">{formatToday()}</p>
+
       {/* Goal Progress Card */}
       <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50">
         <CardHeader className="pb-2">
@@ -113,40 +137,40 @@ export default function PresidentHomeTab() {
         </CardContent>
       </Card>
 
-      {/* Deduction Status Tabs */}
+      {/* Contribution Status Tabs */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2 rounded-lg bg-muted p-1">
             <button
-              onClick={() => setActiveTab("not-deducted")}
+              onClick={() => setActiveTab("missed")}
               className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                activeTab === "not-deducted"
+                activeTab === "missed"
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <Clock className="inline h-3.5 w-3.5 mr-1" />
-              Not Deducted ({notDeducted.length})
+              <XCircle className="inline h-3.5 w-3.5 mr-1" />
+              Missed ({missed.length})
             </button>
             <button
-              onClick={() => setActiveTab("deducted")}
+              onClick={() => setActiveTab("contributed")}
               className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                activeTab === "deducted"
+                activeTab === "contributed"
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <CheckCircle2 className="inline h-3.5 w-3.5 mr-1" />
-              Deducted ({deducted.length})
+              Contributed ({contributed.length})
             </button>
           </div>
         </CardHeader>
         <CardContent className="pt-0">
           {displayList.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">
-              {activeTab === "deducted"
-                ? "No members deducted today yet."
-                : "All members have been deducted today."}
+              {activeTab === "contributed"
+                ? "No contributions recorded today yet."
+                : "Everyone has contributed today! 🎉"}
             </p>
           ) : (
             <div className="space-y-1">
@@ -171,13 +195,18 @@ export default function PresidentHomeTab() {
                       )}
                     </p>
                   </div>
-                  <span
-                    className={`text-sm font-semibold ${
-                      m.balance >= 0 ? "text-green-600" : "text-red-600"
-                    }`}
-                  >
-                    ₱{Math.abs(m.balance).toFixed(2)}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className={`h-2 w-2 rounded-full ${balanceDot(m.balance)}`} />
+                    {m.deductedToday ? (
+                      <span className={`text-sm font-semibold ${balanceColor(m.balance)}`}>
+                        ₱{Math.abs(m.balance).toFixed(2)}
+                      </span>
+                    ) : (
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {m.balance <= 0 ? "Low balance" : `₱${m.balance.toFixed(2)}`}
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
