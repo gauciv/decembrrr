@@ -185,6 +185,44 @@ export async function getMyTransactions(profileId: string, limit = 50) {
   return data as Transaction[];
 }
 
+/** Paginated transaction query for the student Transactions tab */
+export async function getMyTransactionsPaginated(
+  profileId: string,
+  page: number,
+  pageSize = 20
+) {
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const { data, error, count } = await supabase
+    .from("transactions")
+    .select("*", { count: "exact" })
+    .eq("profile_id", profileId)
+    .order("created_at", { ascending: false })
+    .range(from, to);
+  if (error) throw resolveError(error);
+  return {
+    transactions: data as Transaction[],
+    total: count ?? 0,
+    page,
+    pageSize,
+    totalPages: Math.ceil((count ?? 0) / pageSize),
+  };
+}
+
+/** Fetch recent deductions only (for the student Home tab) */
+export async function getMyRecentDeductions(profileId: string, limit = 10) {
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("profile_id", profileId)
+    .eq("type", "deduction")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw resolveError(error);
+  return data as Transaction[];
+}
+
 export async function getClassTransactions(classId: string, limit = 100) {
   const { data, error } = await supabase
     .from("transactions")
@@ -296,4 +334,102 @@ export async function exportTransactionsCsv(classId: string) {
   a.download = `decembrrr-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// --- Student CSV Export ---
+
+/** Export a single student's transactions as CSV (for student Transactions tab) */
+export async function exportMyTransactionsCsv(profileId: string, studentName: string) {
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("profile_id", profileId)
+    .order("created_at", { ascending: false });
+  if (error) throw resolveError(error);
+
+  const header = "Date,Type,Amount,Balance Before,Balance After,Note";
+  const rows = (data as Transaction[]).map((t) => {
+    const date = new Date(t.created_at).toLocaleString("en-PH");
+    const escapeCsv = (s: string) => `"${s.replace(/"/g, '""')}"`;
+    return [
+      escapeCsv(date),
+      t.type,
+      t.amount.toFixed(2),
+      t.balance_before.toFixed(2),
+      t.balance_after.toFixed(2),
+      escapeCsv(t.note ?? ""),
+    ].join(",");
+  });
+
+  const csv = [header, ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${studentName.replace(/\s+/g, "-").toLowerCase()}-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// --- Class Status ---
+
+/** Get today's payment status for all class members (for student Class tab) */
+export async function getClassTodayStatus(classId: string) {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [membersResult, todayTxnsResult] = await Promise.all([
+    supabase.from("profiles").select("id, name, avatar_url").eq("class_id", classId).order("name"),
+    supabase
+      .from("transactions")
+      .select("profile_id")
+      .eq("class_id", classId)
+      .eq("type", "deposit")
+      .gte("created_at", `${today}T00:00:00`)
+      .lte("created_at", `${today}T23:59:59`),
+  ]);
+
+  if (membersResult.error) throw resolveError(membersResult.error);
+  if (todayTxnsResult.error) throw resolveError(todayTxnsResult.error);
+
+  const paidIds = new Set(
+    (todayTxnsResult.data as Array<{ profile_id: string }>).map((t) => t.profile_id)
+  );
+
+  return (membersResult.data as Array<{ id: string; name: string; avatar_url: string | null }>).map(
+    (m) => ({ ...m, paidToday: paidIds.has(m.id) })
+  );
+}
+
+/** Get a student's transaction dates for the payment calendar view */
+export async function getMyTransactionDates(
+  profileId: string,
+  year: number,
+  month: number
+) {
+  const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+  const endDate =
+    month === 12
+      ? `${year + 1}-01-01`
+      : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("type, created_at")
+    .eq("profile_id", profileId)
+    .gte("created_at", startDate)
+    .lt("created_at", endDate)
+    .order("created_at");
+  if (error) throw resolveError(error);
+
+  // Build a map of date → { hasDeposit, hasDeduction }
+  const dateMap = new Map<string, { hasDeposit: boolean; hasDeduction: boolean }>();
+  for (const txn of data as Array<{ type: string; created_at: string }>) {
+    const dateKey = txn.created_at.slice(0, 10);
+    const existing = dateMap.get(dateKey) ?? { hasDeposit: false, hasDeduction: false };
+    if (txn.type === "deposit") existing.hasDeposit = true;
+    if (txn.type === "deduction") existing.hasDeduction = true;
+    dateMap.set(dateKey, existing);
+  }
+
+  return dateMap;
 }
