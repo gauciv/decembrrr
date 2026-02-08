@@ -12,6 +12,18 @@ import {
 import { createClass, joinClass } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
 
+/** Strips non-digits and re-formats with commas: 20000 → 20,000 */
+function formatWithCommas(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+  return Number(digits).toLocaleString("en-PH");
+}
+
+/** Strips commas to get the raw number */
+function parseFormattedNumber(value: string): number {
+  return Number(value.replace(/,/g, "")) || 0;
+}
+
 export default function OnboardingPage() {
   const { refreshProfile, signOut } = useAuth();
   const [mode, setMode] = useState<"choose" | "create" | "join">("choose");
@@ -36,7 +48,7 @@ export default function OnboardingPage() {
       await createClass({
         name: className.trim(),
         dailyAmount: parseFloat(dailyAmount) || 10,
-        fundGoal: fundGoal ? parseFloat(fundGoal) : null,
+        fundGoal: fundGoal ? parseFormattedNumber(fundGoal) : null,
         collectionFrequency: frequency,
       });
       await refreshProfile();
@@ -132,8 +144,8 @@ export default function OnboardingPage() {
                     id="amount"
                     type="number"
                     min="1"
-                    step="0.50"
-                    placeholder="10.00"
+                    step="1"
+                    placeholder="10"
                     value={dailyAmount}
                     onChange={(e) => setDailyAmount(e.target.value)}
                   />
@@ -167,12 +179,11 @@ export default function OnboardingPage() {
                 </label>
                 <Input
                   id="goal"
-                  type="number"
-                  min="0"
-                  step="100"
-                  placeholder="e.g. 5000"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="e.g. 5,000"
                   value={fundGoal}
-                  onChange={(e) => setFundGoal(e.target.value)}
+                  onChange={(e) => setFundGoal(formatWithCommas(e.target.value))}
                 />
                 <p className="text-xs text-muted-foreground">
                   You can change all of these later in settings.
