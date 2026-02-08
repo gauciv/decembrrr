@@ -5,6 +5,8 @@ import {
   getMyClass,
   recordDeposit,
   getMyTransactions,
+  getStudentPaymentStats,
+  buildStudentEmailUri,
   type Transaction,
   type ClassData,
 } from "@/lib/api";
@@ -28,6 +30,7 @@ import {
   Copy,
   TrendingUp,
   TrendingDown,
+  Mail,
   X,
 } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
@@ -60,6 +63,9 @@ export default function PresidentClassTab() {
   // Invite dialog
   const [showInvite, setShowInvite] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Email
+  const [emailLoading, setEmailLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!profile?.class_id) return;
@@ -117,6 +123,21 @@ export default function PresidentClassTab() {
     navigator.clipboard.writeText(classData.invite_code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function sendStudentEmail(student: Profile) {
+    if (!profile?.class_id || !classData) return;
+    setEmailLoading(true);
+    try {
+      const stats = await getStudentPaymentStats(student.id, profile.class_id);
+      const uri = buildStudentEmailUri(stats, classData.name);
+      window.open(uri, "_blank");
+    } catch (err) {
+      setToast(getErrorMessage(err));
+      setTimeout(() => setToast(""), 4000);
+    } finally {
+      setEmailLoading(false);
+    }
   }
 
   if (!profile?.class_id) return null;
@@ -303,6 +324,23 @@ export default function PresidentClassTab() {
             </DialogTitle>
             <DialogDescription>Transaction history</DialogDescription>
           </DialogHeader>
+
+          {/* Email Button */}
+          {logStudent && (
+            <div className="pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                disabled={emailLoading}
+                onClick={() => sendStudentEmail(logStudent)}
+              >
+                <Mail className="h-4 w-4 mr-1.5" />
+                {emailLoading ? "Preparing…" : "Email Payment Summary"}
+              </Button>
+            </div>
+          )}
+
           <div className="max-h-80 overflow-y-auto space-y-1 pt-2">
             {logTxns.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
