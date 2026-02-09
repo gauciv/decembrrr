@@ -1,22 +1,38 @@
 import { useAuth } from "@/context/auth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function LoginPage() {
   const { signInWithGoogle } = useAuth();
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-gradient-to-br from-red-50 to-green-50 p-4">
-      <Card className="w-full max-w-sm text-center">
-        <CardHeader>
-          <div className="text-4xl mb-2">🎄</div>
-          <CardTitle className="text-2xl font-bold">Decembrrr</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Christmas Party Fund Tracker
-          </p>
-        </CardHeader>
-        <CardContent>
-          <Button onClick={signInWithGoogle} className="w-full" size="lg">
+    <div className="flex min-h-svh flex-col items-center justify-center bg-gradient-to-b from-emerald-50 via-white to-red-50 p-6">
+      <div className="w-full max-w-sm space-y-8">
+        {/* Brand */}
+        <div className="text-center space-y-3">
+          <div className="inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg shadow-emerald-200">
+            <span className="text-4xl">🎄</span>
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Decembrrr</h1>
+            <p className="text-muted-foreground mt-1">
+              Christmas Party Fund Tracker
+            </p>
+          </div>
+        </div>
+
+        {/* Sign in card */}
+        <div className="rounded-2xl border bg-card p-6 shadow-sm space-y-5">
+          <div className="text-center space-y-1">
+            <h2 className="text-lg font-semibold">Welcome</h2>
+            <p className="text-sm text-muted-foreground">
+              Sign in to manage your class fund
+            </p>
+          </div>
+          <Button
+            onClick={signInWithGoogle}
+            className="w-full h-12 text-base font-medium"
+            variant="outline"
+          >
             <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24">
               <path
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
@@ -35,13 +51,15 @@ export default function LoginPage() {
                 fill="#EA4335"
               />
             </svg>
-            Sign in with Google
+            Continue with Google
           </Button>
-          <p className="mt-4 text-xs text-muted-foreground">
-            Sign in to track your contributions
-          </p>
-        </CardContent>
-      </Card>
+        </div>
+
+        {/* Footer */}
+        <p className="text-center text-xs text-muted-foreground">
+          Track daily contributions · Scan QR to record payments
+        </p>
+      </div>
     </div>
   );
 }
