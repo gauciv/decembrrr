@@ -1,7 +1,8 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
@@ -19,9 +20,14 @@ import {
   Plus,
   BarChart3,
   Wallet,
+  ChevronRight,
+  Download,
+  CalendarDays,
   type LucideIcon,
 } from "lucide-react";
-import { useState, lazy, Suspense } from "react";
+import { useState, lazy, Suspense, useCallback, useEffect } from "react";
+import { getMyClass, exportTransactionsCsv, type ClassData } from "@/lib/api";
+import { getErrorMessage } from "@/lib/errors";
 
 const ScanFlow = lazy(() => import("@/components/president/scan-flow"));
 
@@ -52,8 +58,22 @@ function initials(name: string) {
 
 export default function AppLayout() {
   const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const [classData, setClassData] = useState<ClassData | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [toast, setToast] = useState("");
+
+  const loadClass = useCallback(async () => {
+    if (!profile?.class_id) return;
+    try {
+      const c = await getMyClass(profile.class_id);
+      setClassData(c);
+    } catch { /* ignore */ }
+  }, [profile?.class_id]);
+
+  useEffect(() => { loadClass(); }, [loadClass]);
 
   if (!profile) return null;
 
@@ -95,18 +115,91 @@ export default function AppLayout() {
                 <SheetTitle>Account</SheetTitle>
               </SheetHeader>
               <div className="mt-6 space-y-5">
+                {/* Profile info */}
                 <div className="flex items-center gap-3">
                   <Avatar className="h-12 w-12">
                     <AvatarImage src={profile.avatar_url || undefined} />
                     <AvatarFallback>{initials(profile.name)}</AvatarFallback>
                   </Avatar>
-                  <div className="min-w-0">
-                    <p className="font-medium truncate">{profile.name}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-medium truncate">{profile.name}</p>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
+                        {isPresident ? "President" : "Member"}
+                      </Badge>
+                    </div>
                     <p className="text-sm text-muted-foreground truncate">
                       {profile.email}
                     </p>
                   </div>
                 </div>
+
+                {/* Class summary */}
+                {classData && (
+                  <>
+                    <Separator />
+                    <div className="rounded-lg border p-3 space-y-1.5">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Class</p>
+                      <p className="text-sm font-semibold">{classData.name}</p>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span>₱{classData.daily_amount}/day</span>
+                        {classData.fund_goal && <span>Goal: ₱{classData.fund_goal.toLocaleString()}</span>}
+                        <span>Since {new Date(classData.date_initiated + "T00:00:00").toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                <Separator />
+
+                {/* Quick actions */}
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Quick Actions</p>
+
+                  {isPresident && (
+                    <>
+                      <button
+                        onClick={() => { setSheetOpen(false); navigate("/calendar"); }}
+                        className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm hover:bg-accent transition-colors"
+                      >
+                        <span className="flex items-center gap-2">
+                          <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                          No-Class Dates
+                        </span>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!profile.class_id || downloading) return;
+                          setDownloading(true);
+                          try {
+                            await exportTransactionsCsv(profile.class_id);
+                            setToast("CSV downloaded");
+                            setTimeout(() => setToast(""), 3000);
+                          } catch (err) {
+                            setToast(getErrorMessage(err));
+                            setTimeout(() => setToast(""), 4000);
+                          } finally {
+                            setDownloading(false);
+                          }
+                        }}
+                        className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm hover:bg-accent transition-colors"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Download className="h-4 w-4 text-muted-foreground" />
+                          {downloading ? "Downloading…" : "Export Transactions"}
+                        </span>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {toast && (
+                  <div className="rounded-md bg-green-50 border border-green-200 p-2 text-xs text-green-700 text-center">
+                    {toast}
+                  </div>
+                )}
 
                 <Separator />
 
