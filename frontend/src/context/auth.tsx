@@ -54,6 +54,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null);
         return;
       }
+
+      // Sync Google metadata (avatar, name) on each login
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        const meta = currentUser.user_metadata;
+        const googleName = meta?.full_name || meta?.name;
+        const googleAvatar = meta?.avatar_url || meta?.picture;
+        const updates: Record<string, string> = {};
+        if (googleAvatar && googleAvatar !== data.avatar_url) updates.avatar_url = googleAvatar;
+        if (googleName && googleName !== data.name) updates.name = googleName;
+        if (Object.keys(updates).length > 0) {
+          await supabase.from("profiles").update(updates).eq("id", userId);
+          Object.assign(data, updates);
+        }
+      }
+
       setProfile(data);
       setError(null);
     } catch (err) {

@@ -27,6 +27,7 @@ export const ErrorCode = {
   PAYMENT_INVALID_AMOUNT: "ERR_4002",
   PAYMENT_RECORD_FAILED: "ERR_4003",
   PAYMENT_NOT_PRESIDENT: "ERR_4004",
+  PAYMENT_STUDENT_NOT_IN_CLASS: "ERR_4005",
 
   // Calendar (5xxx)
   CALENDAR_DATE_EXISTS: "ERR_5001",
@@ -81,6 +82,8 @@ const messages: Record<ErrorCode, string> = {
     "The payment couldn't be saved. Please try again — if it keeps failing, contact your administrator.",
   [ErrorCode.PAYMENT_NOT_PRESIDENT]:
     "Only the class president can record payments.",
+  [ErrorCode.PAYMENT_STUDENT_NOT_IN_CLASS]:
+    "This student exists but is not a member of your class.",
 
   // Calendar
   [ErrorCode.CALENDAR_DATE_EXISTS]:

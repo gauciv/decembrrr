@@ -70,7 +70,7 @@ export default function ScanFlow({ open, onOpenChange, onComplete }: ScanFlowPro
       try {
         const data = await getStudentById(studentId, profile.class_id);
         setStudent(data);
-        setStep("amount");
+        setStep("confirm");
       } catch (err) {
         setErrorMsg(getErrorMessage(err));
         setStep("error");
@@ -133,6 +133,41 @@ export default function ScanFlow({ open, onOpenChange, onComplete }: ScanFlowPro
               ) : (
                 <QrScanner onScan={handleScan} onError={handleScanError} />
               )}
+            </div>
+          </>
+        )}
+
+        {/* Confirm student */}
+        {step === "confirm" && student && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-500" />
+                Student Found
+              </DialogTitle>
+              <DialogDescription>
+                Confirm this is the right student
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col items-center py-4 space-y-3">
+              <Avatar className="h-16 w-16">
+                <AvatarImage src={student.avatar_url || undefined} />
+                <AvatarFallback className="text-lg">{initials(student.name)}</AvatarFallback>
+              </Avatar>
+              <div className="text-center">
+                <p className="text-lg font-semibold">{student.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  Current balance: ₱{student.balance.toFixed(2)}
+                </p>
+              </div>
+              <div className="flex gap-2 w-full pt-2">
+                <Button variant="outline" className="flex-1" onClick={reset}>
+                  Wrong Student
+                </Button>
+                <Button className="flex-1" onClick={() => setStep("amount")}>
+                  Continue
+                </Button>
+              </div>
             </div>
           </>
         )}

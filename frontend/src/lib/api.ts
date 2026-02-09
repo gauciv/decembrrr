@@ -101,6 +101,43 @@ export async function joinClass(inviteCode: string) {
   return classData as ClassData;
 }
 
+export interface UpdateClassInput {
+  name?: string;
+  dailyAmount?: number;
+  fundGoal?: number | null;
+}
+
+export async function updateClass(classId: string, input: UpdateClassInput) {
+  const updates: Record<string, unknown> = {};
+  if (input.name !== undefined) updates.name = input.name;
+  if (input.dailyAmount !== undefined) updates.daily_amount = input.dailyAmount;
+  if (input.fundGoal !== undefined) updates.fund_goal = input.fundGoal;
+
+  const { data, error } = await supabase
+    .from("classes")
+    .update(updates)
+    .eq("id", classId)
+    .select()
+    .single();
+  if (error) throw new AppError(ErrorCode.CLASS_CREATE_FAILED, error.message);
+  return data as ClassData;
+}
+
+export async function deleteClass(classId: string) {
+  // Remove all member references first
+  const { error: profileErr } = await supabase
+    .from("profiles")
+    .update({ class_id: null, is_president: false })
+    .eq("class_id", classId);
+  if (profileErr) throw resolveError(profileErr);
+
+  const { error } = await supabase
+    .from("classes")
+    .delete()
+    .eq("id", classId);
+  if (error) throw resolveError(error);
+}
+
 // --- Students ---
 
 export async function getClassMembers(classId: string) {
@@ -539,14 +576,31 @@ export async function getMonthlyHeatmap(classId: string, year: number, month: nu
 
 /** Look up a student by their profile ID (for QR scan) */
 export async function getStudentById(studentId: string, classId: string) {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, name, avatar_url, balance, is_active")
-    .eq("id", studentId)
-    .eq("class_id", classId)
-    .single();
-  if (error) throw new AppError(ErrorCode.PAYMENT_STUDENT_NOT_FOUND);
-  return data as { id: string; name: string; avatar_url: string | null; balance: number; is_active: boolean };
+  const { data, error } = await supabase.rpc("lookup_student", {
+    student_id: studentId,
+  });
+  if (error || !data) throw new AppError(ErrorCode.PAYMENT_STUDENT_NOT_FOUND);
+
+  const result = data as {
+    found: boolean;
+    id?: string;
+    name?: string;
+    avatar_url?: string | null;
+    balance?: number;
+    is_active?: boolean;
+    in_class?: boolean;
+  };
+
+  if (!result.found) throw new AppError(ErrorCode.PAYMENT_STUDENT_NOT_FOUND);
+  if (!result.in_class) throw new AppError(ErrorCode.PAYMENT_STUDENT_NOT_IN_CLASS, result.name ?? undefined);
+
+  return {
+    id: result.id!,
+    name: result.name!,
+    avatar_url: result.avatar_url ?? null,
+    balance: result.balance!,
+    is_active: result.is_active!,
+  } as { id: string; name: string; avatar_url: string | null; balance: number; is_active: boolean };
 }
 
 // --- Wallet / Fund Details ---

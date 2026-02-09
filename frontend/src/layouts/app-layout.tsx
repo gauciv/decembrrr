@@ -1,7 +1,8 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "@/context/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
   SheetContent,
@@ -9,23 +10,18 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Separator } from "@/components/ui/separator";
+
 import {
   LayoutDashboard,
   LogOut,
-  Copy,
-  ChevronRight,
   Receipt,
   Users,
   Plus,
   BarChart3,
   Wallet,
-  CalendarOff,
   type LucideIcon,
 } from "lucide-react";
 import { useState, lazy, Suspense } from "react";
-import { getMyClass, type ClassData } from "@/lib/api";
-import { useEffect } from "react";
 
 const ScanFlow = lazy(() => import("@/components/president/scan-flow"));
 
@@ -56,17 +52,8 @@ function initials(name: string) {
 
 export default function AppLayout() {
   const { profile, signOut } = useAuth();
-  const navigate = useNavigate();
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [classData, setClassData] = useState<ClassData | null>(null);
-  const [copied, setCopied] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
-
-  useEffect(() => {
-    if (profile?.class_id) {
-      getMyClass(profile.class_id).then(setClassData);
-    }
-  }, [profile?.class_id]);
 
   if (!profile) return null;
 
@@ -76,13 +63,6 @@ export default function AppLayout() {
     if (item.studentOnly && isPresident) return false;
     return true;
   });
-
-  function copyInviteCode() {
-    if (!classData?.invite_code) return;
-    navigator.clipboard.writeText(classData.invite_code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
 
   const presidentLeft = visibleNav.filter(
     (i) => i.to === "/" || i.to === "/class-list"
@@ -98,11 +78,6 @@ export default function AppLayout() {
         <div className="flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-2">
             <span className="text-lg font-bold tracking-tight">Decembrrr</span>
-            {classData && (
-              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                {classData.name}
-              </span>
-            )}
           </div>
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger asChild>
@@ -132,90 +107,6 @@ export default function AppLayout() {
                     </p>
                   </div>
                 </div>
-
-                <Separator />
-
-                {classData && (
-                  <div className="space-y-3">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Class
-                    </p>
-                    <div className="rounded-lg border p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">
-                          {classData.name}
-                        </span>
-                        <span className="text-xs capitalize bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                          {isPresident ? "President" : "Member"}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">
-                          ₱{classData.daily_amount}/
-                          {classData.collection_frequency === "weekly"
-                            ? "week"
-                            : "day"}
-                        </span>
-                        {classData.fund_goal && (
-                          <span className="text-muted-foreground">
-                            Goal: ₱{classData.fund_goal.toLocaleString()}
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        onClick={copyInviteCode}
-                        className="flex w-full items-center justify-between rounded-md bg-muted p-2 text-sm hover:bg-muted/80 transition-colors"
-                      >
-                        <span className="font-mono tracking-widest">
-                          {classData.invite_code}
-                        </span>
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          {copied ? (
-                            "Copied!"
-                          ) : (
-                            <>
-                              <Copy className="h-3 w-3" /> Copy
-                            </>
-                          )}
-                        </span>
-                      </button>
-                      {isPresident && (
-                        <div className="flex flex-col items-center pt-2">
-                          <img
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
-                              `${window.location.origin}/join?code=${classData.invite_code}`
-                            )}`}
-                            alt="QR code to join class"
-                            className="h-32 w-32 rounded-md"
-                          />
-                          <p className="text-xs text-muted-foreground mt-1.5">
-                            Students can scan to join
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <Separator />
-
-                {isPresident && (
-                  <div className="space-y-1">
-                    <button
-                      onClick={() => {
-                        setSheetOpen(false);
-                        navigate("/calendar");
-                      }}
-                      className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm hover:bg-accent transition-colors"
-                    >
-                      <span className="flex items-center gap-2">
-                        <CalendarOff className="h-4 w-4 text-muted-foreground" />
-                        Manage Exemptions
-                      </span>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                  </div>
-                )}
 
                 <Separator />
 

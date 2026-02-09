@@ -202,8 +202,12 @@ export default function PresidentHomeTab() {
                         ₱{Math.abs(m.balance).toFixed(2)}
                       </span>
                     ) : (
-                      <span className="text-sm font-medium text-muted-foreground">
-                        {m.balance <= 0 ? "Low balance" : `₱${m.balance.toFixed(2)}`}
+                      <span className={`text-sm font-medium ${balanceColor(m.balance)}`}>
+                        {m.balance === 0
+                          ? "No balance"
+                          : m.balance < 0
+                            ? `−₱${Math.abs(m.balance).toFixed(2)}`
+                            : `₱${m.balance.toFixed(2)}`}
                       </span>
                     )}
                   </div>

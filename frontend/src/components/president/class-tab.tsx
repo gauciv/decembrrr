@@ -7,8 +7,11 @@ import {
   getMyTransactions,
   getStudentPaymentStats,
   buildStudentEmailUri,
+  updateClass,
+  deleteClass,
   type Transaction,
   type ClassData,
+  type UpdateClassInput,
 } from "@/lib/api";
 import type { Profile } from "@/context/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -32,6 +35,9 @@ import {
   TrendingDown,
   Mail,
   X,
+  Pencil,
+  Check,
+  Trash2,
 } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
 
@@ -62,7 +68,20 @@ export default function PresidentClassTab() {
 
   // Invite dialog
   const [showInvite, setShowInvite] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
+  const [qrCopied, setQrCopied] = useState(false);
+
+  // Edit dialog
+  const [showEdit, setShowEdit] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDaily, setEditDaily] = useState("");
+  const [editGoal, setEditGoal] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Delete dialog
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   // Email
   const [emailLoading, setEmailLoading] = useState(false);
@@ -121,8 +140,78 @@ export default function PresidentClassTab() {
   function copyInviteCode() {
     if (!classData?.invite_code) return;
     navigator.clipboard.writeText(classData.invite_code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 2000);
+  }
+
+  async function copyQrImage() {
+    if (!classData?.invite_code) return;
+    try {
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(
+        `${window.location.origin}/join?code=${classData.invite_code}`
+      )}`;
+      const response = await fetch(qrUrl);
+      const blob = await response.blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({ "image/png": blob }),
+      ]);
+      setQrCopied(true);
+      setTimeout(() => setQrCopied(false), 2000);
+    } catch {
+      navigator.clipboard.writeText(
+        `${window.location.origin}/join?code=${classData.invite_code}`
+      );
+      setQrCopied(true);
+      setTimeout(() => setQrCopied(false), 2000);
+    }
+  }
+
+  function openEdit() {
+    if (!classData) return;
+    setEditName(classData.name);
+    setEditDaily(String(classData.daily_amount));
+    setEditGoal(classData.fund_goal ? String(classData.fund_goal) : "");
+    setShowEdit(true);
+  }
+
+  async function handleSaveEdit() {
+    if (!classData || !profile?.class_id) return;
+    setSaving(true);
+    try {
+      const input: UpdateClassInput = {};
+      if (editName.trim() && editName.trim() !== classData.name) input.name = editName.trim();
+      if (editDaily && parseFloat(editDaily) !== classData.daily_amount) input.dailyAmount = parseFloat(editDaily);
+      const goalVal = editGoal ? parseFloat(editGoal) : null;
+      if (goalVal !== classData.fund_goal) input.fundGoal = goalVal;
+
+      if (Object.keys(input).length > 0) {
+        await updateClass(profile.class_id, input);
+        await loadData();
+        setToast("Class updated");
+        setTimeout(() => setToast(""), 3000);
+      }
+      setShowEdit(false);
+    } catch (err) {
+      setToast(getErrorMessage(err));
+      setTimeout(() => setToast(""), 4000);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteClass() {
+    if (!classData || !profile?.class_id) return;
+    if (deleteConfirmName.trim() !== classData.name) return;
+    setDeleting(true);
+    try {
+      await deleteClass(profile.class_id);
+      await refreshProfile();
+      window.location.href = "/";
+    } catch (err) {
+      setToast(getErrorMessage(err));
+      setTimeout(() => setToast(""), 4000);
+      setDeleting(false);
+    }
   }
 
   async function sendStudentEmail(student: Profile) {
@@ -151,25 +240,49 @@ export default function PresidentClassTab() {
         </div>
       )}
 
-      {/* Search + Add Student */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search students…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
+      {/* Class Details Card */}
+      {classData && (
+        <div className="rounded-xl border bg-gradient-to-br from-slate-50 to-white p-4 space-y-3">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-lg font-bold">{classData.name}</h2>
+              <p className="text-sm text-muted-foreground">
+                ₱{classData.daily_amount}/
+                {classData.collection_frequency === "weekly" ? "week" : "day"}
+                {classData.fund_goal && (
+                  <> · Goal: ₱{classData.fund_goal.toLocaleString("en-PH")}</>
+                )}
+              </p>
+            </div>
+            <Badge variant="secondary" className="text-xs">
+              {members.length} members
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground font-mono tracking-wider">
+            Code: {classData.invite_code}
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="flex-1" onClick={openEdit}>
+              <Pencil className="h-3.5 w-3.5 mr-1.5" />
+              Edit
+            </Button>
+            <Button variant="outline" size="sm" className="flex-1" onClick={() => setShowInvite(true)}>
+              <UserPlus className="h-3.5 w-3.5 mr-1.5" />
+              Invite
+            </Button>
+          </div>
         </div>
-        <Button
-          size="icon"
-          variant="outline"
-          onClick={() => setShowInvite(true)}
-          aria-label="Add student"
-        >
-          <UserPlus className="h-4 w-4" />
-        </Button>
+      )}
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Search students…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
       </div>
 
       {/* Student List */}
@@ -206,15 +319,23 @@ export default function PresidentClassTab() {
                   </p>
                   <p
                     className={`text-sm font-semibold ${
-                      member.balance >= 0 ? "text-green-600" : "text-red-600"
+                      member.balance <= 0
+                        ? "text-red-600"
+                        : member.balance < 50
+                          ? "text-amber-500"
+                          : "text-green-600"
                     }`}
                   >
-                    {member.balance >= 0 ? (
-                      <TrendingUp className="inline h-3 w-3 mr-0.5" />
-                    ) : (
+                    {member.balance <= 0 ? (
                       <TrendingDown className="inline h-3 w-3 mr-0.5" />
+                    ) : (
+                      <TrendingUp className="inline h-3 w-3 mr-0.5" />
                     )}
-                    ₱{Math.abs(member.balance).toFixed(2)}
+                    {member.balance === 0
+                      ? "₱0.00"
+                      : member.balance < 0
+                        ? `−₱${Math.abs(member.balance).toFixed(2)}`
+                        : `₱${member.balance.toFixed(2)}`}
                   </p>
                 </div>
               </button>
@@ -387,7 +508,10 @@ export default function PresidentClassTab() {
       <Dialog open={showInvite} onOpenChange={setShowInvite}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Students</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              Invite Students
+            </DialogTitle>
             <DialogDescription>
               Share the invite code or QR with your classmates
             </DialogDescription>
@@ -395,6 +519,34 @@ export default function PresidentClassTab() {
           <div className="space-y-4 pt-2">
             {classData && (
               <>
+                {/* QR Code */}
+                <div className="flex flex-col items-center">
+                  <button onClick={copyQrImage} className="relative group cursor-pointer">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(
+                        `${window.location.origin}/join?code=${classData.invite_code}`
+                      )}`}
+                      alt="QR code to join class"
+                      className="h-48 w-48 rounded-lg border-2 border-dashed border-muted-foreground/20 p-2"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="text-white text-sm font-medium flex items-center gap-1">
+                        {qrCopied ? (<><Check className="h-4 w-4" /> Copied!</>) : (<><Copy className="h-4 w-4" /> Copy QR</>)}
+                      </span>
+                    </div>
+                  </button>
+                  {qrCopied && (
+                    <p className="text-xs text-green-600 mt-1.5 flex items-center gap-1">
+                      <Check className="h-3 w-3" /> QR code copied!
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1.5">
+                    Tap QR to copy · Students scan to join
+                  </p>
+                </div>
+
+                <Separator />
+
                 {/* Invite code */}
                 <button
                   onClick={copyInviteCode}
@@ -404,8 +556,10 @@ export default function PresidentClassTab() {
                     {classData.invite_code}
                   </span>
                   <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                    {copied ? (
-                      "Copied!"
+                    {codeCopied ? (
+                      <span className="text-green-600 flex items-center gap-1">
+                        <Check className="h-4 w-4" /> Copied!
+                      </span>
                     ) : (
                       <>
                         <Copy className="h-4 w-4" /> Copy
@@ -413,19 +567,7 @@ export default function PresidentClassTab() {
                     )}
                   </span>
                 </button>
-                {/* QR Code */}
-                <div className="flex flex-col items-center">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
-                      `${window.location.origin}/join?code=${classData.invite_code}`
-                    )}`}
-                    alt="QR code to join class"
-                    className="h-40 w-40 rounded-lg"
-                  />
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Students scan this to join instantly
-                  </p>
-                </div>
+
                 <Button
                   variant="outline"
                   className="w-full"
@@ -436,6 +578,87 @@ export default function PresidentClassTab() {
                 </Button>
               </>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Class Dialog */}
+      <Dialog open={showEdit} onOpenChange={setShowEdit}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5" />
+              Edit Class
+            </DialogTitle>
+            <DialogDescription>Update your class settings</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-sm font-medium">Class Name</label>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="e.g. Section A" />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Daily Amount (₱)</label>
+              <Input type="number" value={editDaily} onChange={(e) => setEditDaily(e.target.value)} placeholder="e.g. 10" min="1" />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Fund Goal (₱)</label>
+              <Input type="number" value={editGoal} onChange={(e) => setEditGoal(e.target.value)} placeholder="Leave empty for no goal" min="0" />
+              <p className="text-xs text-muted-foreground mt-1">Leave empty for no target goal</p>
+            </div>
+            <Button className="w-full" onClick={handleSaveEdit} disabled={saving || !editName.trim()}>
+              {saving ? "Saving…" : "Save Changes"}
+            </Button>
+            <Separator />
+            <Button
+              variant="outline"
+              className="w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+              onClick={() => { setShowEdit(false); setDeleteConfirmName(""); setShowDelete(true); }}
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              Delete Class
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDelete} onOpenChange={setShowDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <Trash2 className="h-5 w-5" />
+              Delete Class
+            </DialogTitle>
+            <DialogDescription>
+              This action is permanent and cannot be undone. All member data, transactions, and fund records will be lost.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+              <p className="text-sm text-red-700">
+                To confirm, type the class name: <span className="font-bold">{classData?.name}</span>
+              </p>
+            </div>
+            <Input
+              value={deleteConfirmName}
+              onChange={(e) => setDeleteConfirmName(e.target.value)}
+              placeholder="Type class name to confirm"
+              className="border-red-200 focus-visible:ring-red-500"
+            />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setShowDelete(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                disabled={deleting || deleteConfirmName.trim() !== classData?.name}
+                onClick={handleDeleteClass}
+              >
+                {deleting ? "Deleting…" : "Delete Forever"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
