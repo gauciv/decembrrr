@@ -7,29 +7,16 @@ import {
   type WalletSummary,
   type ClassData,
 } from "@/lib/api";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import {
   Wallet,
   Download,
-  TrendingUp,
-  TrendingDown,
   Users,
   AlertTriangle,
   ArrowUpRight,
   ArrowDownRight,
 } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
-
-function initials(name: string) {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2);
-}
 
 export default function PresidentWalletTab() {
   const { profile } = useAuth();
@@ -175,57 +162,6 @@ export default function PresidentWalletTab() {
         <Download className="h-4 w-4 mr-2" />
         {downloading ? "Downloading…" : "Download Transactions CSV"}
       </Button>
-
-      <Separator />
-
-      {/* Member Balances */}
-      <div>
-        <h3 className="text-sm font-medium text-muted-foreground mb-3">
-          Member Balances
-        </h3>
-        <div className="space-y-1">
-          {wallet.memberBalances.map((member) => (
-            <div
-              key={member.id}
-              className="flex items-center gap-3 rounded-lg border p-3"
-            >
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={member.avatar_url || undefined} />
-                <AvatarFallback className="text-xs">
-                  {initials(member.name)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-sm font-medium truncate">{member.name}</p>
-                  {!member.is_active && (
-                    <Badge variant="secondary" className="text-xs px-1.5 py-0">
-                      Inactive
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground truncate">
-                  {member.email}
-                </p>
-              </div>
-              <div className="text-right shrink-0">
-                <p
-                  className={`text-sm font-semibold flex items-center gap-0.5 ${
-                    member.balance >= 0 ? "text-green-600" : "text-red-600"
-                  }`}
-                >
-                  {member.balance >= 0 ? (
-                    <TrendingUp className="h-3 w-3" />
-                  ) : (
-                    <TrendingDown className="h-3 w-3" />
-                  )}
-                  ₱{Math.abs(member.balance).toFixed(2)}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
