@@ -292,10 +292,12 @@ export default function PresidentClassTab() {
             No students found
           </p>
         ) : (
-          filtered.map((member) => (
+          filtered.map((member) => {
+            const isMe = member.id === profile.id;
+            return (
             <div
               key={member.id}
-              className="flex items-center gap-3 rounded-lg border p-3"
+              className={`flex items-center gap-3 rounded-lg border p-3 ${isMe ? "bg-primary/5 border-primary/20" : ""}`}
             >
               {/* Clickable area for student log */}
               <button
@@ -311,10 +313,10 @@ export default function PresidentClassTab() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">
                     {member.name}
-                    {member.id === profile.id && (
-                      <span className="text-xs text-muted-foreground ml-1">
-                        (You)
-                      </span>
+                    {isMe && (
+                      <Badge variant="outline" className="ml-1.5 text-[10px] px-1.5 py-0 align-middle border-primary/30 text-primary">
+                        You · President
+                      </Badge>
                     )}
                   </p>
                   <p
@@ -350,7 +352,7 @@ export default function PresidentClassTab() {
                 Add
               </Button>
             </div>
-          ))
+          );})
         )}
       </div>
 
