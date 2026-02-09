@@ -22,6 +22,8 @@ export interface ClassData {
   collection_frequency: "daily" | "weekly";
   invite_code: string;
   president_id: string;
+  date_initiated: string;
+  collection_days: number[];
   created_at: string;
 }
 
@@ -40,6 +42,8 @@ export interface CreateClassInput {
   dailyAmount?: number;
   fundGoal?: number | null;
   collectionFrequency?: "daily" | "weekly";
+  dateInitiated?: string;
+  collectionDays?: number[];
 }
 
 export async function createClass(input: CreateClassInput) {
@@ -55,6 +59,8 @@ export async function createClass(input: CreateClassInput) {
       daily_amount: input.dailyAmount ?? 10,
       fund_goal: input.fundGoal ?? null,
       collection_frequency: input.collectionFrequency ?? "daily",
+      date_initiated: input.dateInitiated ?? new Date().toISOString().slice(0, 10),
+      collection_days: input.collectionDays ?? [1, 2, 3, 4, 5],
       president_id: user.id,
     })
     .select()
@@ -105,6 +111,8 @@ export interface UpdateClassInput {
   name?: string;
   dailyAmount?: number;
   fundGoal?: number | null;
+  dateInitiated?: string;
+  collectionDays?: number[];
 }
 
 export async function updateClass(classId: string, input: UpdateClassInput) {
@@ -112,6 +120,8 @@ export async function updateClass(classId: string, input: UpdateClassInput) {
   if (input.name !== undefined) updates.name = input.name;
   if (input.dailyAmount !== undefined) updates.daily_amount = input.dailyAmount;
   if (input.fundGoal !== undefined) updates.fund_goal = input.fundGoal;
+  if (input.dateInitiated !== undefined) updates.date_initiated = input.dateInitiated;
+  if (input.collectionDays !== undefined) updates.collection_days = input.collectionDays;
 
   const { data, error } = await supabase
     .from("classes")
@@ -307,6 +317,34 @@ export async function removeNoClassDate(dateId: string) {
     .delete()
     .eq("id", dateId);
   if (error) throw resolveError(error);
+}
+
+/** Rollback a no-class date: reverses deductions and marks the date as no-class */
+export async function rollbackNoClassDate(classId: string, date: string) {
+  const { data, error } = await supabase.rpc("rollback_no_class_date", {
+    p_class_id: classId,
+    p_date: date,
+  });
+  if (error) throw resolveError(error);
+  return data as { status: string; date: string; rolled_back: number };
+}
+
+/** Check if a given date is a collection day for the class */
+export function isCollectionDay(
+  date: Date,
+  collectionDays: number[],
+  dateInitiated: string,
+  noClassDates: Set<string>,
+): boolean {
+  const initiated = new Date(dateInitiated + "T00:00:00");
+  if (date < initiated) return false;
+  // ISO weekday: 1=Mon … 7=Sun (JS getDay: 0=Sun … 6=Sat)
+  const jsDay = date.getDay();
+  const isoDay = jsDay === 0 ? 7 : jsDay;
+  if (!collectionDays.includes(isoDay)) return false;
+  const dateStr = date.toISOString().slice(0, 10);
+  if (noClassDates.has(dateStr)) return false;
+  return true;
 }
 
 // --- Audit ---
@@ -683,7 +721,7 @@ export async function getStudentPaymentStats(
 ): Promise<StudentPaymentStats> {
   const [studentResult, classResult, txnsResult, noClassResult] = await Promise.all([
     supabase.from("profiles").select("name, email, balance").eq("id", profileId).single(),
-    supabase.from("classes").select("created_at, daily_amount").eq("id", classId).single(),
+    supabase.from("classes").select("created_at, daily_amount, date_initiated, collection_days").eq("id", classId).single(),
     supabase
       .from("transactions")
       .select("*")
@@ -699,24 +737,24 @@ export async function getStudentPaymentStats(
   if (noClassResult.error) throw resolveError(noClassResult.error);
 
   const student = studentResult.data as { name: string; email: string; balance: number };
-  const classInfo = classResult.data as { created_at: string; daily_amount: number };
+  const classInfo = classResult.data as { created_at: string; daily_amount: number; date_initiated: string; collection_days: number[] };
   const txns = txnsResult.data as Transaction[];
   const noClassDates = new Set(
     (noClassResult.data as Array<{ date: string }>).map((d) => d.date)
   );
 
-  // Count weekdays from class creation to today, excluding no-class dates + weekends
-  const startDate = new Date(classInfo.created_at);
-  startDate.setHours(0, 0, 0, 0);
+  // Count collection days from date_initiated to today
+  const startDate = new Date(classInfo.date_initiated + "T00:00:00");
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   let totalExpectedDays = 0;
   const cursor = new Date(startDate);
   while (cursor <= today) {
-    const day = cursor.getDay();
     const dateStr = cursor.toISOString().slice(0, 10);
-    if (day !== 0 && day !== 6 && !noClassDates.has(dateStr)) {
+    const jsDay = cursor.getDay();
+    const isoDay = jsDay === 0 ? 7 : jsDay;
+    if (classInfo.collection_days.includes(isoDay) && !noClassDates.has(dateStr)) {
       totalExpectedDays++;
     }
     cursor.setDate(cursor.getDate() + 1);
