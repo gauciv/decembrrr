@@ -68,7 +68,7 @@ export default function ScanFlow({ open, onOpenChange, onComplete }: ScanFlowPro
       const studentId = decodedText.trim();
       setLoading(true);
       try {
-        const data = await getStudentById(studentId, profile.class_id);
+        const data = await getStudentById(studentId);
         setStudent(data);
         setStep("confirm");
       } catch (err) {

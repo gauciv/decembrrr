@@ -575,7 +575,7 @@ export async function getMonthlyHeatmap(classId: string, year: number, month: nu
 }
 
 /** Look up a student by their profile ID (for QR scan) */
-export async function getStudentById(studentId: string, classId: string) {
+export async function getStudentById(studentId: string) {
   const { data, error } = await supabase.rpc("lookup_student", {
     student_id: studentId,
   });
