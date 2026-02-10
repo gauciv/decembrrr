@@ -16,6 +16,7 @@ import {
   ArrowDownRight,
 } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
+import { TabSkeleton } from "@/components/ui/skeleton";
 
 export default function PresidentWalletTab() {
   const { profile } = useAuth();
@@ -59,13 +60,7 @@ export default function PresidentWalletTab() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <p className="text-sm text-muted-foreground">Loading wallet…</p>
-      </div>
-    );
-  }
+  if (loading) return <TabSkeleton />;
 
   if (!wallet || !classData) return null;
 

@@ -9,6 +9,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Target, Users, CheckCircle2, XCircle } from "lucide-react";
+import { TabSkeleton } from "@/components/ui/skeleton";
 
 interface MemberDeductionStatus {
   id: string;
@@ -56,20 +57,26 @@ export default function PresidentHomeTab() {
     totalMembers: 0,
   });
   const [members, setMembers] = useState<MemberDeductionStatus[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"missed" | "contributed">(
     "missed"
   );
 
   const loadData = useCallback(async () => {
     if (!profile?.class_id) return;
-    const [classInfo, summaryData, statusData] = await Promise.all([
-      getMyClass(profile.class_id),
-      getClassFundSummary(profile.class_id),
-      getClassDeductionStatus(profile.class_id),
-    ]);
-    setClassData(classInfo);
-    setSummary(summaryData);
-    setMembers(statusData);
+    setLoading(true);
+    try {
+      const [classInfo, summaryData, statusData] = await Promise.all([
+        getMyClass(profile.class_id),
+        getClassFundSummary(profile.class_id),
+        getClassDeductionStatus(profile.class_id),
+      ]);
+      setClassData(classInfo);
+      setSummary(summaryData);
+      setMembers(statusData);
+    } finally {
+      setLoading(false);
+    }
   }, [profile?.class_id]);
 
   useEffect(() => {
@@ -77,6 +84,7 @@ export default function PresidentHomeTab() {
   }, [loadData]);
 
   if (!profile?.class_id) return null;
+  if (loading) return <TabSkeleton />;
 
   const goalProgress = classData?.fund_goal
     ? Math.min(100, (summary.totalBalance / classData.fund_goal) * 100)

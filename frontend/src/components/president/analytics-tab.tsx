@@ -30,6 +30,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
+import { TabSkeleton } from "@/components/ui/skeleton";
 
 interface WeeklyData {
   thisWeekTotal: number;
@@ -84,15 +85,20 @@ export default function PresidentAnalyticsTab() {
   const [reason, setReason] = useState("");
   const [dayLoading, setDayLoading] = useState(false);
   const [toast, setToast] = useState("");
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const loadClass = useCallback(async () => {
     if (!profile?.class_id) return;
-    const [c, ncd] = await Promise.all([
-      getMyClass(profile.class_id),
-      getNoClassDates(profile.class_id),
-    ]);
-    setClassData(c);
-    setNoClassDates(ncd);
+    try {
+      const [c, ncd] = await Promise.all([
+        getMyClass(profile.class_id),
+        getNoClassDates(profile.class_id),
+      ]);
+      setClassData(c);
+      setNoClassDates(ncd);
+    } finally {
+      setInitialLoading(false);
+    }
   }, [profile?.class_id]);
 
   const loadWeekly = useCallback(async () => {
@@ -190,6 +196,7 @@ export default function PresidentAnalyticsTab() {
   }
 
   if (!profile?.class_id) return null;
+  if (initialLoading) return <TabSkeleton />;
 
   const wowChange =
     weekly && weekly.lastWeekTotal > 0

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { TrendingDown, Wallet } from "lucide-react";
+import { TabSkeleton } from "@/components/ui/skeleton";
 
 /**
  * Student Home Tab — shows current balance and recent daily deductions.
@@ -14,16 +15,18 @@ export default function StudentHomeTab() {
   const { profile } = useAuth();
   const [deductions, setDeductions] = useState<Transaction[]>([]);
   const [classData, setClassData] = useState<ClassData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!profile) return;
-    getMyRecentDeductions(profile.id).then(setDeductions);
-    if (profile.class_id) {
-      getMyClass(profile.class_id).then(setClassData);
-    }
+    Promise.all([
+      getMyRecentDeductions(profile.id).then(setDeductions),
+      profile.class_id ? getMyClass(profile.class_id).then(setClassData) : Promise.resolve(),
+    ]).finally(() => setLoading(false));
   }, [profile]);
 
   if (!profile) return null;
+  if (loading) return <TabSkeleton />;
 
   // Balance is always displayed as 0 or positive (wallet balance)
   const displayBalance = Math.max(0, profile.balance);

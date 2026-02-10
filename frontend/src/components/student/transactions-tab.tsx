@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Download, ChevronLeft, ChevronRight, FileText } from "lucide-react";
+import { TabSkeleton } from "@/components/ui/skeleton";
 
 /**
  * Student Transactions Tab — paginated log of all deposits & deductions
@@ -21,17 +22,22 @@ export default function StudentTransactionsTab() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const pageSize = 20;
 
   const loadPage = useCallback(
     async (p: number) => {
       if (!profile) return;
-      const result = await getMyTransactionsPaginated(profile.id, p, pageSize);
-      setTransactions(result.transactions);
-      setTotalPages(result.totalPages);
-      setTotal(result.total);
-      setPage(result.page);
+      try {
+        const result = await getMyTransactionsPaginated(profile.id, p, pageSize);
+        setTransactions(result.transactions);
+        setTotalPages(result.totalPages);
+        setTotal(result.total);
+        setPage(result.page);
+      } finally {
+        setLoading(false);
+      }
     },
     [profile]
   );
@@ -41,6 +47,7 @@ export default function StudentTransactionsTab() {
   }, [loadPage]);
 
   if (!profile) return null;
+  if (loading) return <TabSkeleton />;
 
   async function handleExport() {
     if (!profile) return;

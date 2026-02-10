@@ -40,6 +40,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
+import { TabSkeleton } from "@/components/ui/skeleton";
 
 function initials(name: string) {
   return name
@@ -87,15 +88,20 @@ export default function PresidentClassTab() {
 
   // Email
   const [emailLoading, setEmailLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     if (!profile?.class_id) return;
-    const [membersData, classInfo] = await Promise.all([
-      getClassMembers(profile.class_id),
-      getMyClass(profile.class_id),
-    ]);
-    setMembers(membersData.sort((a, b) => a.name.localeCompare(b.name)));
-    setClassData(classInfo);
+    try {
+      const [membersData, classInfo] = await Promise.all([
+        getClassMembers(profile.class_id),
+        getMyClass(profile.class_id),
+      ]);
+      setMembers(membersData.sort((a, b) => a.name.localeCompare(b.name)));
+      setClassData(classInfo);
+    } finally {
+      setInitialLoading(false);
+    }
   }, [profile?.class_id]);
 
   useEffect(() => {
@@ -237,6 +243,7 @@ export default function PresidentClassTab() {
   }
 
   if (!profile?.class_id) return null;
+  if (initialLoading) return <TabSkeleton />;
 
   return (
     <div className="space-y-4">
