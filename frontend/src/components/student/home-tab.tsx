@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useAuth } from "@/context/auth";
 import { getMyRecentDeductions, getMyClass, getNoClassDates, type Transaction, type ClassData, type NoClassDate } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { TrendingDown, Wallet } from "lucide-react";
 import { TabSkeleton } from "@/components/ui/skeleton";
+import { useAutoRefresh } from "@/lib/use-auto-refresh";
 
 function useCountdown(targetDate: Date | null) {
   const [now, setNow] = useState(() => new Date());
@@ -37,14 +38,18 @@ export default function StudentHomeTab() {
   const [noClassDates, setNoClassDates] = useState<NoClassDate[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!profile) return;
-    Promise.all([
+    await Promise.all([
       getMyRecentDeductions(profile.id).then(setDeductions),
       profile.class_id ? getMyClass(profile.class_id).then(setClassData) : Promise.resolve(),
       profile.class_id ? getNoClassDates(profile.class_id).then(setNoClassDates) : Promise.resolve(),
     ]).finally(() => setLoading(false));
   }, [profile]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  useAutoRefresh(loadData);
 
   // Compute next deduction date once (must be before early returns — Rules of Hooks)
   const nextDeductionDate = useMemo(() => {

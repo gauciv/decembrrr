@@ -358,7 +358,7 @@ export function isCollectionDay(
 // --- Audit ---
 
 export async function getClassFundSummary(classId: string) {
-  const [membersResult, deductionsResult, depositsResult] = await Promise.all([
+  const [membersResult, depositsResult] = await Promise.all([
     supabase
       .from("profiles")
       .select("balance, is_active")
@@ -367,29 +367,20 @@ export async function getClassFundSummary(classId: string) {
       .from("transactions")
       .select("amount")
       .eq("class_id", classId)
-      .eq("type", "deduction"),
-    supabase
-      .from("transactions")
-      .select("amount")
-      .eq("class_id", classId)
       .eq("type", "deposit"),
   ]);
   if (membersResult.error) throw resolveError(membersResult.error);
-  if (deductionsResult.error) throw resolveError(deductionsResult.error);
   if (depositsResult.error) throw resolveError(depositsResult.error);
 
   const members = membersResult.data as Array<{ balance: number; is_active: boolean }>;
-  const totalDeductions = (deductionsResult.data as Array<{ amount: number }>).reduce((s, t) => s + t.amount, 0);
   const totalDeposits = (depositsResult.data as Array<{ amount: number }>).reduce((s, t) => s + t.amount, 0);
 
-  // Class fund = deposits received minus refunds. Net collected amount.
-  // Since deductions reduce member balance and deposits increase it,
-  // the fund collected is deductions - deposits (deposits go back to student).
-  const totalCollected = totalDeductions - totalDeposits;
+  // Class fund = total deposits (money physically collected from students).
+  // Deposits add to the fund. The only decrease is a no-class-day refund.
   const activeCount = members.filter((m) => m.is_active).length;
   const totalMembers = members.length;
 
-  return { totalBalance: Math.max(0, totalCollected), activeCount, totalMembers };
+  return { totalBalance: totalDeposits, activeCount, totalMembers };
 }
 
 // --- CSV Export ---
@@ -747,8 +738,10 @@ export async function getWalletSummary(classId: string): Promise<WalletSummary> 
   const totalDeposits = (depositsResult.data as Array<{ amount: number }>).reduce((s, t) => s + t.amount, 0);
   const totalDeductions = (deductionsResult.data as Array<{ amount: number }>).reduce((s, t) => s + t.amount, 0);
 
+  // Class fund = money physically collected from students (deposits).
+  // Deposits increase the fund; the only decrease is a no-class-day refund.
   return {
-    totalBalance: totalDeductions - totalDeposits,
+    totalBalance: totalDeposits,
     totalDeposits,
     totalDeductions,
     activeMembers: members.filter((m) => m.is_active).length,

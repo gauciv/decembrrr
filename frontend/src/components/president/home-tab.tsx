@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Target, Users, CheckCircle2, XCircle } from "lucide-react";
 import { TabSkeleton } from "@/components/ui/skeleton";
+import { useAutoRefresh } from "@/lib/use-auto-refresh";
 
 interface MemberDeductionStatus {
   id: string;
@@ -76,6 +77,8 @@ export default function PresidentHomeTab() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useAutoRefresh(loadData);
 
   if (!profile?.class_id) return null;
   if (loading) return <TabSkeleton />;
