@@ -349,8 +349,12 @@ export default function PresidentAnalyticsTab() {
               const pct = heatmap.get(cell.dateStr) ?? 0;
 
               let cellClass = "aspect-square rounded-md flex items-center justify-center text-xs font-medium relative group cursor-default ";
-              if (isBeforeInit || !payDay || isFuture) {
+              if (isBeforeInit || !payDay) {
+                // Not a collection day or before class started — fully muted
                 cellClass += "bg-muted/40 text-muted-foreground/40";
+              } else if (isFuture) {
+                // Future pay day — outlined but not colored yet
+                cellClass += "border border-dashed border-muted-foreground/30 text-muted-foreground/60";
               } else if (isNoClass) {
                 cellClass += "bg-gray-800 text-white cursor-pointer";
               } else {
@@ -381,6 +385,10 @@ export default function PresidentAnalyticsTab() {
             <div className="flex items-center gap-1">
               <div className="h-3 w-3 rounded-sm bg-muted/40" />
               <span>Off</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="h-3 w-3 rounded-sm border border-dashed border-muted-foreground/30" />
+              <span>Upcoming</span>
             </div>
             <div className="flex items-center gap-1">
               <div className="h-3 w-3 rounded-sm bg-red-300" />
