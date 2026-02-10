@@ -11,13 +11,26 @@ export default function QrScanner({ onScan, onError }: QrScannerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const hasScanned = useRef(false);
-  const isRunning = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Use refs for callbacks to avoid re-running the effect on every render
+  const onScanRef = useRef(onScan);
+  const onErrorRef = useRef(onError);
+  onScanRef.current = onScan;
+  onErrorRef.current = onError;
 
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Generate a unique ID to avoid collisions with stale elements
     const scannerId = "qr-scanner-region";
+    // Clean up any leftover DOM content from prior mounts (React StrictMode)
+    const container = containerRef.current;
+    container.innerHTML = "";
+    const scannerDiv = document.createElement("div");
+    scannerDiv.id = scannerId;
+    container.appendChild(scannerDiv);
+
+    let cancelled = false;
     const scanner = new Html5Qrcode(scannerId);
     scannerRef.current = scanner;
 
@@ -26,31 +39,39 @@ export default function QrScanner({ onScan, onError }: QrScannerProps) {
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         (decodedText) => {
-          if (hasScanned.current) return;
+          if (hasScanned.current || cancelled) return;
           hasScanned.current = true;
-          isRunning.current = false;
           scanner
             .stop()
-            .then(() => onScan(decodedText))
-            .catch(() => onScan(decodedText));
+            .then(() => onScanRef.current(decodedText))
+            .catch(() => onScanRef.current(decodedText));
         },
         () => {}
       )
-      .then(() => {
-        isRunning.current = true;
-      })
       .catch((err: unknown) => {
+        if (cancelled) return;
         const msg = err instanceof Error ? err.message : String(err);
-        onError?.(msg);
+        onErrorRef.current?.(msg);
       });
 
     return () => {
-      if (isRunning.current) {
-        isRunning.current = false;
-        scanner.stop().catch(() => {});
-      }
+      cancelled = true;
+      // Always attempt to stop — covers race conditions during start
+      scanner.stop().catch(() => {});
+      // Also explicitly stop any media tracks to release the camera
+      try {
+        const video = container.querySelector("video");
+        if (video?.srcObject) {
+          (video.srcObject as MediaStream)
+            .getTracks()
+            .forEach((t) => t.stop());
+          video.srcObject = null;
+        }
+      } catch { /* ignore */ }
+      container.innerHTML = "";
+      scannerRef.current = null;
     };
-  }, [onScan, onError]);
+  }, []); // No dependencies — runs once on mount, cleans up on unmount
 
   const handleFileUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -58,31 +79,37 @@ export default function QrScanner({ onScan, onError }: QrScannerProps) {
       if (!file || hasScanned.current) return;
 
       // Stop the live scanner first if running
-      if (scannerRef.current && isRunning.current) {
-        isRunning.current = false;
+      if (scannerRef.current) {
         try { await scannerRef.current.stop(); } catch { /* ignore */ }
       }
 
       try {
-        const scanner = new Html5Qrcode("qr-scanner-region");
-        const result = await scanner.scanFile(file, /* showImage */ false);
+        // Create a temporary off-screen element for file scanning
+        const tempId = "qr-file-scanner-temp";
+        let tempEl = document.getElementById(tempId);
+        if (!tempEl) {
+          tempEl = document.createElement("div");
+          tempEl.id = tempId;
+          tempEl.style.display = "none";
+          document.body.appendChild(tempEl);
+        }
+        const fileScanner = new Html5Qrcode(tempId);
+        const result = await fileScanner.scanFile(file, false);
         hasScanned.current = true;
-        onScan(result);
+        onScanRef.current(result);
+        tempEl.remove();
       } catch {
-        onError?.("No QR code found in the uploaded image");
+        onErrorRef.current?.("No QR code found in the uploaded image");
       }
 
-      // Reset the input so the same file can be re-selected
       if (fileInputRef.current) fileInputRef.current.value = "";
     },
-    [onScan, onError]
+    []
   );
 
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-lg">
-        <div id="qr-scanner-region" ref={containerRef} />
-      </div>
+      <div className="overflow-hidden rounded-lg" ref={containerRef} />
       <button
         type="button"
         onClick={() => fileInputRef.current?.click()}
