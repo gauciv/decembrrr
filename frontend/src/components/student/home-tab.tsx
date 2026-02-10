@@ -46,15 +46,7 @@ export default function StudentHomeTab() {
     ]).finally(() => setLoading(false));
   }, [profile]);
 
-  if (!profile) return null;
-  if (loading) return <TabSkeleton />;
-
-  // Balance is always displayed as 0 or positive (wallet balance)
-  const displayBalance = Math.max(0, profile.balance);
-  // Missed amount is how much they owe if balance went negative
-  const missedAmount = profile.balance < 0 ? Math.abs(profile.balance) : 0;
-
-  // Compute next deduction date once
+  // Compute next deduction date once (must be before early returns — Rules of Hooks)
   const nextDeductionDate = useMemo(() => {
     if (!classData) return null;
     const noClassSet = new Set(noClassDates.map((d) => d.date));
@@ -63,7 +55,6 @@ export default function StudentHomeTab() {
     for (let offset = 0; offset <= 14; offset++) {
       const d = new Date(now);
       d.setDate(d.getDate() + offset);
-      // Skip today if it's already past midnight (deduction already ran)
       if (offset === 0) {
         d.setHours(0, 0, 0, 0);
         if (d.getTime() <= now.getTime()) continue;
@@ -80,6 +71,14 @@ export default function StudentHomeTab() {
   }, [classData, noClassDates]);
 
   const countdown = useCountdown(nextDeductionDate);
+
+  if (!profile) return null;
+  if (loading) return <TabSkeleton />;
+
+  // Balance is always displayed as 0 or positive (wallet balance)
+  const displayBalance = Math.max(0, profile.balance);
+  // Missed amount is how much they owe if balance went negative
+  const missedAmount = profile.balance < 0 ? Math.abs(profile.balance) : 0;
 
   return (
     <div className="space-y-6">
