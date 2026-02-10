@@ -350,18 +350,38 @@ export function isCollectionDay(
 // --- Audit ---
 
 export async function getClassFundSummary(classId: string) {
-  const { data: members, error } = await supabase
-    .from("profiles")
-    .select("balance, is_active")
-    .eq("class_id", classId);
-  if (error) throw resolveError(error);
+  const [membersResult, deductionsResult, depositsResult] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("balance, is_active")
+      .eq("class_id", classId),
+    supabase
+      .from("transactions")
+      .select("amount")
+      .eq("class_id", classId)
+      .eq("type", "deduction"),
+    supabase
+      .from("transactions")
+      .select("amount")
+      .eq("class_id", classId)
+      .eq("type", "deposit"),
+  ]);
+  if (membersResult.error) throw resolveError(membersResult.error);
+  if (deductionsResult.error) throw resolveError(deductionsResult.error);
+  if (depositsResult.error) throw resolveError(depositsResult.error);
 
-  const totalBalance = members.reduce((sum, m) => sum + m.balance, 0);
+  const members = membersResult.data as Array<{ balance: number; is_active: boolean }>;
+  const totalDeductions = (deductionsResult.data as Array<{ amount: number }>).reduce((s, t) => s + t.amount, 0);
+  const totalDeposits = (depositsResult.data as Array<{ amount: number }>).reduce((s, t) => s + t.amount, 0);
+
+  // Class fund = deposits received minus refunds. Net collected amount.
+  // Since deductions reduce member balance and deposits increase it,
+  // the fund collected is deductions - deposits (deposits go back to student).
+  const totalCollected = totalDeductions - totalDeposits;
   const activeCount = members.filter((m) => m.is_active).length;
   const totalMembers = members.length;
-  const inDebt = members.filter((m) => m.balance < 0).length;
 
-  return { totalBalance, activeCount, totalMembers, inDebt };
+  return { totalBalance: Math.max(0, totalCollected), activeCount, totalMembers };
 }
 
 // --- CSV Export ---
@@ -649,7 +669,6 @@ export interface WalletSummary {
   totalDeductions: number;
   activeMembers: number;
   totalMembers: number;
-  inDebt: number;
   memberBalances: Array<{
     id: string;
     name: string;
@@ -690,12 +709,11 @@ export async function getWalletSummary(classId: string): Promise<WalletSummary> 
   const totalDeductions = (deductionsResult.data as Array<{ amount: number }>).reduce((s, t) => s + t.amount, 0);
 
   return {
-    totalBalance: members.reduce((s, m) => s + m.balance, 0),
+    totalBalance: totalDeductions - totalDeposits,
     totalDeposits,
     totalDeductions,
     activeMembers: members.filter((m) => m.is_active).length,
     totalMembers: members.length,
-    inDebt: members.filter((m) => m.balance < 0).length,
     memberBalances: members,
   };
 }

@@ -25,35 +25,25 @@ export default function StudentHomeTab() {
 
   if (!profile) return null;
 
-  const isPositive = profile.balance >= 0;
+  // Balance is always displayed as 0 or positive (wallet balance)
+  const displayBalance = Math.max(0, profile.balance);
+  // Missed amount is how much they owe if balance went negative
+  const missedAmount = profile.balance < 0 ? Math.abs(profile.balance) : 0;
 
   return (
     <div className="space-y-6">
       {/* Balance Card */}
-      <Card
-        className={
-          isPositive ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
-        }
-      >
+      <Card className="border-green-200 bg-green-50">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
             <Wallet className="h-4 w-4" />
-            Current Balance
+            Wallet Balance
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p
-            className={`text-4xl font-bold ${
-              isPositive ? "text-green-700" : "text-red-700"
-            }`}
-          >
-            ₱{Math.abs(profile.balance).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+          <p className="text-4xl font-bold text-green-700">
+            ₱{displayBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
           </p>
-          {!isPositive && (
-            <p className="text-sm text-red-600 mt-1">
-              You owe ₱{Math.abs(profile.balance).toLocaleString("en-PH", { minimumFractionDigits: 2 })} — please pay your class president.
-            </p>
-          )}
           {classData && (
             <p className="text-sm text-muted-foreground mt-1">
               {classData.name} · ₱{classData.daily_amount}/
@@ -62,6 +52,27 @@ export default function StudentHomeTab() {
           )}
         </CardContent>
       </Card>
+
+      {/* Missed Payments Notice */}
+      {missedAmount > 0 && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="pt-4">
+            <div className="flex items-start gap-3">
+              <TrendingDown className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-amber-800">
+                  You have ₱{missedAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })} in missed payments
+                </p>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  {classData
+                    ? `That's about ${Math.ceil(missedAmount / classData.daily_amount)} day${Math.ceil(missedAmount / classData.daily_amount) !== 1 ? "s" : ""} of unpaid contributions. Please pay your class president.`
+                    : "Please pay your class president to settle."}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recent Deductions */}
       <Card>

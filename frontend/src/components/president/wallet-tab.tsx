@@ -12,7 +12,6 @@ import {
   Wallet,
   Download,
   Users,
-  AlertTriangle,
   ArrowUpRight,
   ArrowDownRight,
 } from "lucide-react";
@@ -142,13 +141,6 @@ export default function PresidentWalletTab() {
               /{wallet.totalMembers}
             </span>
           </p>
-        </div>
-        <div className="rounded-lg border p-3 space-y-1">
-          <div className="flex items-center gap-1.5">
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
-            <span className="text-xs text-muted-foreground">In Debt</span>
-          </div>
-          <p className="text-lg font-bold text-amber-500">{wallet.inDebt}</p>
         </div>
       </div>
 

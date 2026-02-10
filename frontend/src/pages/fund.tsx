@@ -19,7 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Download, Users, UserCheck, AlertTriangle, Target } from "lucide-react";
+import { Download, Users, UserCheck, Target } from "lucide-react";
 
 interface TransactionWithProfile {
   id: string;
@@ -46,7 +46,6 @@ export default function FundPage() {
     totalBalance: 0,
     activeCount: 0,
     totalMembers: 0,
-    inDebt: 0,
   });
   const [recentTxns, setRecentTxns] = useState<TransactionWithProfile[]>([]);
   const [exporting, setExporting] = useState(false);
@@ -126,7 +125,7 @@ export default function FundPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <Card>
           <CardContent className="pt-5 text-center">
             <Users className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
@@ -139,13 +138,6 @@ export default function FundPage() {
             <UserCheck className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
             <p className="text-xl font-bold">{summary.activeCount}</p>
             <p className="text-xs text-muted-foreground">Active</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5 text-center">
-            <AlertTriangle className="h-4 w-4 mx-auto mb-1 text-red-500" />
-            <p className="text-xl font-bold text-red-600">{summary.inDebt}</p>
-            <p className="text-xs text-muted-foreground">In Debt</p>
           </CardContent>
         </Card>
       </div>
@@ -176,10 +168,10 @@ export default function FundPage() {
                 </p>
               </div>
               <Badge
-                variant={member.balance >= 0 ? "default" : "destructive"}
-                className={member.balance >= 0 ? "bg-green-600" : ""}
+                variant="default"
+                className="bg-green-600"
               >
-                ₱{member.balance.toFixed(2)}
+                ₱{Math.max(0, member.balance).toFixed(2)}
               </Badge>
             </div>
           ))}

@@ -32,7 +32,7 @@ function initials(name: string) {
 export default function StudentClassTab() {
   const { profile } = useAuth();
   const [classData, setClassData] = useState<ClassData | null>(null);
-  const [summary, setSummary] = useState({ totalBalance: 0, activeCount: 0, totalMembers: 0, inDebt: 0 });
+  const [summary, setSummary] = useState({ totalBalance: 0, activeCount: 0, totalMembers: 0 });
   const [members, setMembers] = useState<MemberStatus[]>([]);
 
   useEffect(() => {

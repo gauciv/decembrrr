@@ -27,13 +27,13 @@ function initials(name: string) {
 }
 
 function balanceColor(balance: number): string {
-  if (balance <= 0) return "text-red-600";
+  if (balance === 0) return "text-muted-foreground";
   if (balance < 50) return "text-amber-500";
   return "text-green-600";
 }
 
 function balanceDot(balance: number): string {
-  if (balance <= 0) return "bg-red-500";
+  if (balance === 0) return "bg-red-500";
   if (balance < 50) return "bg-amber-400";
   return "bg-green-500";
 }
@@ -54,7 +54,6 @@ export default function PresidentHomeTab() {
     totalBalance: 0,
     activeCount: 0,
     totalMembers: 0,
-    inDebt: 0,
   });
   const [members, setMembers] = useState<MemberDeductionStatus[]>([]);
   const [activeTab, setActiveTab] = useState<"missed" | "contributed">(
@@ -196,18 +195,16 @@ export default function PresidentHomeTab() {
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className={`h-2 w-2 rounded-full ${balanceDot(m.balance)}`} />
+                    <span className={`h-2 w-2 rounded-full ${balanceDot(Math.max(0, m.balance))}`} />
                     {m.deductedToday ? (
-                      <span className={`text-sm font-semibold ${balanceColor(m.balance)}`}>
-                        ₱{Math.abs(m.balance).toFixed(2)}
+                      <span className={`text-sm font-semibold ${balanceColor(Math.max(0, m.balance))}`}>
+                        ₱{Math.max(0, m.balance).toFixed(2)}
                       </span>
                     ) : (
-                      <span className={`text-sm font-medium ${balanceColor(m.balance)}`}>
-                        {m.balance === 0
-                          ? "No balance"
-                          : m.balance < 0
-                            ? `−₱${Math.abs(m.balance).toFixed(2)}`
-                            : `₱${m.balance.toFixed(2)}`}
+                      <span className={`text-sm font-medium ${balanceColor(Math.max(0, m.balance))}`}>
+                        {m.balance <= 0
+                          ? "₱0.00"
+                          : `₱${m.balance.toFixed(2)}`}
                       </span>
                     )}
                   </div>
