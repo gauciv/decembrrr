@@ -1,11 +1,30 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/context/auth";
 import { getMyRecentDeductions, getMyClass, getNoClassDates, type Transaction, type ClassData, type NoClassDate } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { TrendingDown, Wallet, Clock } from "lucide-react";
+import { TrendingDown, Wallet } from "lucide-react";
 import { TabSkeleton } from "@/components/ui/skeleton";
+
+function useCountdown(targetDate: Date | null) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    if (!targetDate) return;
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, [targetDate]);
+
+  if (!targetDate) return null;
+  const diff = Math.max(0, targetDate.getTime() - now.getTime());
+  const totalSec = Math.floor(diff / 1000);
+  return {
+    days: Math.floor(totalSec / 86400),
+    hours: Math.floor((totalSec % 86400) / 3600),
+    minutes: Math.floor((totalSec % 3600) / 60),
+    seconds: totalSec % 60,
+  };
+}
 
 /**
  * Student Home Tab — shows current balance and recent daily deductions.
@@ -35,55 +54,76 @@ export default function StudentHomeTab() {
   // Missed amount is how much they owe if balance went negative
   const missedAmount = profile.balance < 0 ? Math.abs(profile.balance) : 0;
 
+  // Compute next deduction date once
+  const nextDeductionDate = useMemo(() => {
+    if (!classData) return null;
+    const noClassSet = new Set(noClassDates.map((d) => d.date));
+    const collectionDays = classData.collection_days ?? [1, 2, 3, 4, 5];
+    const now = new Date();
+    for (let offset = 0; offset <= 14; offset++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() + offset);
+      // Skip today if it's already past midnight (deduction already ran)
+      if (offset === 0) {
+        d.setHours(0, 0, 0, 0);
+        if (d.getTime() <= now.getTime()) continue;
+      }
+      const jsDay = d.getDay();
+      const isoDay = jsDay === 0 ? 7 : jsDay;
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      if (collectionDays.includes(isoDay) && !noClassSet.has(dateStr)) {
+        d.setHours(0, 0, 0, 0);
+        return d;
+      }
+    }
+    return null;
+  }, [classData, noClassDates]);
+
+  const countdown = useCountdown(nextDeductionDate);
+
   return (
     <div className="space-y-6">
       {/* Balance Card */}
-      <Card className="border-green-200 bg-green-50">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-            <Wallet className="h-4 w-4" />
-            Wallet Balance
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-4xl font-bold text-green-700">
-            ₱{displayBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-          </p>
-          {classData && (() => {
-            const noClassSet = new Set(noClassDates.map((d) => d.date));
-            const collectionDays = classData.collection_days ?? [1, 2, 3, 4, 5];
-            const now = new Date();
-            const nextDeduction = (() => {
-              for (let offset = 1; offset <= 14; offset++) {
-                const d = new Date(now);
-                d.setDate(d.getDate() + offset);
-                const jsDay = d.getDay();
-                const isoDay = jsDay === 0 ? 7 : jsDay;
-                const dateStr = d.toISOString().slice(0, 10);
-                if (collectionDays.includes(isoDay) && !noClassSet.has(dateStr)) return d;
-              }
-              return null;
-            })();
-            const hoursUntil = nextDeduction
-              ? Math.max(0, Math.round((nextDeduction.setHours(0, 0, 0, 0) - now.getTime()) / (1000 * 60 * 60)))
-              : null;
-            return (
-              <div className="mt-2 rounded-lg bg-green-100/60 border border-green-200/50 px-3 py-2">
-                <p className="text-xs font-medium text-green-800">{classData.name}</p>
-                <p className="text-xs text-green-700 mt-0.5">
-                  ₱{classData.daily_amount}/{classData.collection_frequency === "weekly" ? "week" : "day"}
-                  {hoursUntil !== null && (
-                    <span className="ml-1.5 inline-flex items-center gap-0.5">
-                      <Clock className="inline h-3 w-3" />
-                      Next deduction in {hoursUntil < 1 ? "<1" : hoursUntil}h
-                    </span>
-                  )}
-                </p>
-              </div>
-            );
-          })()}
-        </CardContent>
-      </Card>
+      <div className="space-y-0">
+        <Card className="border-green-200 bg-green-50 rounded-b-none">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+              <Wallet className="h-4 w-4" />
+              Wallet Balance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-4xl font-bold text-green-700">
+              ₱{displayBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Next Deduction Countdown Strip */}
+        {classData && countdown && (
+          <div className="rounded-b-xl bg-gray-900 text-white px-4 py-2.5 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold truncate">{classData.name}</p>
+              <p className="text-[10px] text-gray-400">₱{classData.daily_amount}/{classData.collection_frequency === "weekly" ? "week" : "day"} · Next deduction</p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {[
+                { value: countdown.days, label: "D" },
+                { value: countdown.hours, label: "H" },
+                { value: countdown.minutes, label: "M" },
+                { value: countdown.seconds, label: "S" },
+              ].map(({ value, label }) => (
+                <div key={label} className="flex flex-col items-center">
+                  <span className="bg-yellow-400 text-gray-900 font-bold text-sm rounded px-1.5 py-0.5 min-w-[28px] text-center tabular-nums">
+                    {String(value).padStart(2, "0")}
+                  </span>
+                  <span className="text-[9px] text-gray-400 mt-0.5">{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Missed Payments Notice */}
       {missedAmount > 0 && (
