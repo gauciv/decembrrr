@@ -358,7 +358,7 @@ export function isCollectionDay(
 // --- Audit ---
 
 export async function getClassFundSummary(classId: string) {
-  const [membersResult, depositsResult] = await Promise.all([
+  const [membersResult, deductionsResult, depositsResult, classResult, noClassResult] = await Promise.all([
     supabase
       .from("profiles")
       .select("balance, is_active")
@@ -367,20 +367,71 @@ export async function getClassFundSummary(classId: string) {
       .from("transactions")
       .select("amount")
       .eq("class_id", classId)
+      .eq("type", "deduction"),
+    supabase
+      .from("transactions")
+      .select("amount")
+      .eq("class_id", classId)
       .eq("type", "deposit"),
+    supabase
+      .from("classes")
+      .select("daily_amount, date_initiated, collection_days")
+      .eq("id", classId)
+      .single(),
+    supabase
+      .from("no_class_dates")
+      .select("date")
+      .eq("class_id", classId),
   ]);
   if (membersResult.error) throw resolveError(membersResult.error);
+  if (deductionsResult.error) throw resolveError(deductionsResult.error);
   if (depositsResult.error) throw resolveError(depositsResult.error);
+  if (classResult.error) throw resolveError(classResult.error);
 
   const members = membersResult.data as Array<{ balance: number; is_active: boolean }>;
+  const totalDeductions = (deductionsResult.data as Array<{ amount: number }>).reduce((s, t) => s + t.amount, 0);
   const totalDeposits = (depositsResult.data as Array<{ amount: number }>).reduce((s, t) => s + t.amount, 0);
 
-  // Class fund = total deposits (money physically collected from students).
-  // Deposits add to the fund. The only decrease is a no-class-day refund.
+  // Class fund = total deductions (money collected FROM students via daily contributions).
+  // Deposits go INTO student wallets — they don't represent fund collection.
   const activeCount = members.filter((m) => m.is_active).length;
   const totalMembers = members.length;
 
-  return { totalBalance: totalDeposits, activeCount, totalMembers };
+  // Compute expected collection: how many collection days have passed × active members × daily rate
+  const classInfo = classResult.data as { daily_amount: number; date_initiated: string; collection_days: number[] };
+  const noClassSet = new Set(
+    ((noClassResult.data ?? []) as Array<{ date: string }>).map((d) => d.date)
+  );
+  const initiated = new Date(classInfo.date_initiated + "T00:00:00");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let collectionDayCount = 0;
+  const cursor = new Date(initiated);
+  while (cursor <= today) {
+    const jsDay = cursor.getDay();
+    const isoDay = jsDay === 0 ? 7 : jsDay;
+    const dateStr = cursor.toISOString().slice(0, 10);
+    if (classInfo.collection_days.includes(isoDay) && !noClassSet.has(dateStr)) {
+      collectionDayCount++;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  // Expected = collection days × active members × daily amount
+  const expectedTotal = collectionDayCount * activeCount * classInfo.daily_amount;
+  // Collection rate: what percentage of expected deductions actually happened
+  const collectionRate = expectedTotal > 0 ? Math.min(100, Math.round((totalDeductions / expectedTotal) * 100)) : 0;
+
+  return {
+    totalBalance: totalDeductions,
+    totalDeposits,
+    totalDeductions,
+    activeCount,
+    totalMembers,
+    collectionDayCount,
+    expectedTotal,
+    collectionRate,
+    dailyAmount: classInfo.daily_amount,
+  };
 }
 
 // --- CSV Export ---
@@ -738,10 +789,10 @@ export async function getWalletSummary(classId: string): Promise<WalletSummary> 
   const totalDeposits = (depositsResult.data as Array<{ amount: number }>).reduce((s, t) => s + t.amount, 0);
   const totalDeductions = (deductionsResult.data as Array<{ amount: number }>).reduce((s, t) => s + t.amount, 0);
 
-  // Class fund = money physically collected from students (deposits).
-  // Deposits increase the fund; the only decrease is a no-class-day refund.
+  // Class fund = total deductions (money collected FROM student balances).
+  // Deposits go INTO student wallets and don't represent fund collection.
   return {
-    totalBalance: totalDeposits,
+    totalBalance: totalDeductions,
     totalDeposits,
     totalDeductions,
     activeMembers: members.filter((m) => m.is_active).length,

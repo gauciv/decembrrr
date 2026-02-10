@@ -6,9 +6,9 @@ import {
   getClassDeductionStatus,
   type ClassData,
 } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Target, Users, CheckCircle2, XCircle } from "lucide-react";
+import { Users, CheckCircle2, XCircle, Wallet, CalendarDays, TrendingUp } from "lucide-react";
 import { TabSkeleton } from "@/components/ui/skeleton";
 import { useAutoRefresh } from "@/lib/use-auto-refresh";
 
@@ -48,8 +48,14 @@ export default function PresidentHomeTab() {
   const [classData, setClassData] = useState<ClassData | null>(null);
   const [summary, setSummary] = useState({
     totalBalance: 0,
+    totalDeposits: 0,
+    totalDeductions: 0,
     activeCount: 0,
     totalMembers: 0,
+    collectionDayCount: 0,
+    expectedTotal: 0,
+    collectionRate: 0,
+    dailyAmount: 0,
   });
   const [members, setMembers] = useState<MemberDeductionStatus[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,6 +93,9 @@ export default function PresidentHomeTab() {
     ? Math.min(100, (summary.totalBalance / classData.fund_goal) * 100)
     : null;
 
+  // Total balance students are still holding (undeducted deposits)
+  const totalStudentBalances = members.reduce((s, m) => s + Math.max(0, m.balance), 0);
+
   const contributed = members.filter((m) => m.deductedToday);
   const missed = members.filter((m) => !m.deductedToday);
   const displayList = activeTab === "contributed" ? contributed : missed;
@@ -96,50 +105,66 @@ export default function PresidentHomeTab() {
       {/* Date Stamp */}
       <p className="text-sm text-muted-foreground">{formatToday()}</p>
 
-      {/* Goal Progress Card */}
-      <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-            <Target className="h-4 w-4" />
-            Class Fund Progress
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-3xl font-bold text-emerald-700">
-            ₱
-            {summary.totalBalance.toLocaleString("en-PH", {
-              minimumFractionDigits: 2,
-            })}
-          </p>
-          {classData?.fund_goal && goalProgress !== null && (
-            <div className="mt-3">
-              <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                <span>{goalProgress.toFixed(0)}% of goal</span>
-                <span>₱{classData.fund_goal.toLocaleString("en-PH")}</span>
-              </div>
-              <div className="h-2.5 rounded-full bg-emerald-200">
-                <div
-                  className="h-2.5 rounded-full bg-emerald-600 transition-all"
-                  style={{ width: `${goalProgress}%` }}
-                />
-              </div>
-            </div>
-          )}
-          {!classData?.fund_goal && (
-            <p className="text-sm text-muted-foreground mt-1">
-              No goal set yet.
-            </p>
-          )}
-          <div className="flex items-center gap-3 mt-3 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Users className="h-3.5 w-3.5" />
-              {summary.activeCount} active
-            </span>
-            <span>·</span>
-            <span>{summary.totalMembers} total</span>
+      {/* Class Fund Card */}
+      <div className="rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 p-5 text-white">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <Wallet className="h-5 w-5 opacity-80" />
+            <span className="text-sm font-medium opacity-80">Class Fund</span>
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex items-center gap-1 text-sm opacity-80">
+            <Users className="h-3.5 w-3.5" />
+            <span>{summary.activeCount}/{summary.totalMembers}</span>
+          </div>
+        </div>
+        <p className="text-3xl font-bold tracking-tight">
+          ₱{summary.totalBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+        </p>
+        {classData?.fund_goal && goalProgress !== null && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between text-sm mb-1">
+              <span className="opacity-80">Goal Progress</span>
+              <span className="font-medium">
+                {goalProgress.toFixed(0)}% of ₱{classData.fund_goal.toLocaleString("en-PH")}
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-white/20">
+              <div
+                className="h-2 rounded-full bg-white transition-all"
+                style={{ width: `${goalProgress}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Stats Row */}
+      <div className="grid grid-cols-3 gap-2">
+        <Card className="p-3">
+          <div className="flex items-center gap-1.5 mb-1">
+            <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Collection</span>
+          </div>
+          <p className="text-lg font-bold">{summary.collectionRate}%</p>
+          <p className="text-[10px] text-muted-foreground">{summary.collectionDayCount} day{summary.collectionDayCount !== 1 ? "s" : ""} so far</p>
+        </Card>
+        <Card className="p-3">
+          <div className="flex items-center gap-1.5 mb-1">
+            <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Deposits</span>
+          </div>
+          <p className="text-lg font-bold">₱{summary.totalDeposits.toLocaleString()}</p>
+          <p className="text-[10px] text-muted-foreground">Cash collected</p>
+        </Card>
+        <Card className="p-3">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Wallets</span>
+          </div>
+          <p className="text-lg font-bold">₱{totalStudentBalances.toLocaleString()}</p>
+          <p className="text-[10px] text-muted-foreground">Student bal.</p>
+        </Card>
+      </div>
 
       {/* Contribution Status Tabs */}
       <Card>
