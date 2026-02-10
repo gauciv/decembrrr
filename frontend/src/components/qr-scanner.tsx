@@ -21,9 +21,8 @@ export default function QrScanner({ onScan, onError }: QrScannerProps) {
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Generate a unique ID to avoid collisions with stale elements
-    const scannerId = "qr-scanner-region";
-    // Clean up any leftover DOM content from prior mounts (React StrictMode)
+    // Use a unique ID per mount to avoid collisions
+    const scannerId = `qr-scanner-${Date.now()}`;
     const container = containerRef.current;
     container.innerHTML = "";
     const scannerDiv = document.createElement("div");
@@ -31,33 +30,43 @@ export default function QrScanner({ onScan, onError }: QrScannerProps) {
     container.appendChild(scannerDiv);
 
     let cancelled = false;
-    const scanner = new Html5Qrcode(scannerId);
-    scannerRef.current = scanner;
+    let scanner: Html5Qrcode | null = null;
 
-    scanner
-      .start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-          if (hasScanned.current || cancelled) return;
-          hasScanned.current = true;
-          scanner
-            .stop()
-            .then(() => onScanRef.current(decodedText))
-            .catch(() => onScanRef.current(decodedText));
-        },
-        () => {}
-      )
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        const msg = err instanceof Error ? err.message : String(err);
-        onErrorRef.current?.(msg);
-      });
+    // Delay scanner start slightly to ensure DOM is settled (Dialog portals)
+    const timer = setTimeout(() => {
+      if (cancelled || !document.getElementById(scannerId)) return;
+
+      scanner = new Html5Qrcode(scannerId);
+      scannerRef.current = scanner;
+
+      scanner
+        .start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          (decodedText) => {
+            if (hasScanned.current || cancelled) return;
+            hasScanned.current = true;
+            scanner
+              ?.stop()
+              .then(() => onScanRef.current(decodedText))
+              .catch(() => onScanRef.current(decodedText));
+          },
+          () => {}
+        )
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          const msg = err instanceof Error ? err.message : String(err);
+          onErrorRef.current?.(msg);
+        });
+    }, 100);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
       // Always attempt to stop — covers race conditions during start
-      scanner.stop().catch(() => {});
+      if (scanner) {
+        scanner.stop().catch(() => {});
+      }
       // Also explicitly stop any media tracks to release the camera
       try {
         const video = container.querySelector("video");

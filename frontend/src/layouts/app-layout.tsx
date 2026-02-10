@@ -2,15 +2,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
 
 import {
   LayoutDashboard,
@@ -20,14 +12,9 @@ import {
   Plus,
   BarChart3,
   Wallet,
-  ChevronRight,
-  Download,
-  CalendarDays,
   type LucideIcon,
 } from "lucide-react";
-import { useState, lazy, Suspense, useCallback, useEffect } from "react";
-import { getMyClass, exportTransactionsCsv, type ClassData } from "@/lib/api";
-import { getErrorMessage } from "@/lib/errors";
+import { useState, lazy, Suspense, useEffect, useRef } from "react";
 
 const ScanFlow = lazy(() => import("@/components/president/scan-flow"));
 
@@ -59,21 +46,21 @@ function initials(name: string) {
 export default function AppLayout() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
-  const [classData, setClassData] = useState<ClassData | null>(null);
-  const [downloading, setDownloading] = useState(false);
-  const [toast, setToast] = useState("");
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  const loadClass = useCallback(async () => {
-    if (!profile?.class_id) return;
-    try {
-      const c = await getMyClass(profile.class_id);
-      setClassData(c);
-    } catch { /* ignore */ }
-  }, [profile?.class_id]);
-
-  useEffect(() => { loadClass(); }, [loadClass]);
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
 
   if (!profile) return null;
 
@@ -99,121 +86,57 @@ export default function AppLayout() {
           <div className="flex items-center gap-2">
             <span className="text-lg font-bold tracking-tight">Decembrrr</span>
           </div>
-          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-            <SheetTrigger asChild>
-              <button className="rounded-full ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={profile.avatar_url || undefined} />
-                  <AvatarFallback className="text-xs">
-                    {initials(profile.name)}
-                  </AvatarFallback>
-                </Avatar>
-              </button>
-            </SheetTrigger>
-            <SheetContent>
-              <SheetHeader>
-                <SheetTitle>Account</SheetTitle>
-              </SheetHeader>
-              <div className="mt-6 space-y-5">
-                {/* Profile info */}
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={profile.avatar_url || undefined} />
-                    <AvatarFallback>{initials(profile.name)}</AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <p className="font-medium truncate">{profile.name}</p>
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
-                        {isPresident ? "President" : "Member"}
-                      </Badge>
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              className="rounded-full ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Avatar className="h-8 w-8">
+                <AvatarImage src={profile.avatar_url || undefined} />
+                <AvatarFallback className="text-xs">
+                  {initials(profile.name)}
+                </AvatarFallback>
+              </Avatar>
+            </button>
+
+            {menuOpen && (
+              <div className="absolute right-0 top-full mt-2 z-50 w-64 rounded-xl border bg-background shadow-lg animate-in fade-in-0 zoom-in-95 slide-in-from-top-2">
+                <div className="p-4 space-y-4">
+                  {/* Profile info */}
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-11 w-11">
+                      <AvatarImage src={profile.avatar_url || undefined} />
+                      <AvatarFallback>{initials(profile.name)}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium truncate text-sm">{profile.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {profile.email}
+                      </p>
+                      {isPresident && (
+                        <p className="text-xs text-muted-foreground">Class Creator</p>
+                      )}
                     </div>
-                    <p className="text-sm text-muted-foreground truncate">
-                      {profile.email}
-                    </p>
                   </div>
+
+                  <Separator />
+
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    size="sm"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      signOut();
+                    }}
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sign Out
+                  </Button>
                 </div>
-
-                {/* Class summary */}
-                {classData && (
-                  <>
-                    <Separator />
-                    <div className="rounded-lg border p-3 space-y-1.5">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Class</p>
-                      <p className="text-sm font-semibold">{classData.name}</p>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span>₱{classData.daily_amount}/day</span>
-                        {classData.fund_goal && <span>Goal: ₱{classData.fund_goal.toLocaleString()}</span>}
-                        <span>Since {new Date(classData.date_initiated + "T00:00:00").toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</span>
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                <Separator />
-
-                {/* Quick actions */}
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Quick Actions</p>
-
-                  {isPresident && (
-                    <>
-                      <button
-                        onClick={() => { setSheetOpen(false); navigate("/calendar"); }}
-                        className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm hover:bg-accent transition-colors"
-                      >
-                        <span className="flex items-center gap-2">
-                          <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                          No-Class Dates
-                        </span>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (!profile.class_id || downloading) return;
-                          setDownloading(true);
-                          try {
-                            await exportTransactionsCsv(profile.class_id);
-                            setToast("CSV downloaded");
-                            setTimeout(() => setToast(""), 3000);
-                          } catch (err) {
-                            setToast(getErrorMessage(err));
-                            setTimeout(() => setToast(""), 4000);
-                          } finally {
-                            setDownloading(false);
-                          }
-                        }}
-                        className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm hover:bg-accent transition-colors"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Download className="h-4 w-4 text-muted-foreground" />
-                          {downloading ? "Downloading…" : "Export Transactions"}
-                        </span>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      </button>
-                    </>
-                  )}
-                </div>
-
-                {toast && (
-                  <div className="rounded-md bg-green-50 border border-green-200 p-2 text-xs text-green-700 text-center">
-                    {toast}
-                  </div>
-                )}
-
-                <Separator />
-
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={signOut}
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out
-                </Button>
               </div>
-            </SheetContent>
-          </Sheet>
+            )}
+          </div>
         </div>
       </header>
 

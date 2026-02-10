@@ -267,6 +267,9 @@ export default function PresidentClassTab() {
                   <> · Goal: ₱{classData.fund_goal.toLocaleString("en-PH")}</>
                 )}
               </p>
+              <p className="text-xs text-muted-foreground">
+                Since {new Date(classData.date_initiated + "T00:00:00").toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}
+              </p>
             </div>
             <Badge variant="secondary" className="text-xs">
               {members.length} members
@@ -347,11 +350,7 @@ export default function PresidentClassTab() {
                     ) : (
                       <TrendingUp className="inline h-3 w-3 mr-0.5" />
                     )}
-                    {member.balance === 0
-                      ? "₱0.00"
-                      : member.balance < 0
-                        ? `−₱${Math.abs(member.balance).toFixed(2)}`
-                        : `₱${member.balance.toFixed(2)}`}
+                    ₱{Math.max(0, member.balance).toFixed(2)}
                   </p>
                 </div>
               </button>

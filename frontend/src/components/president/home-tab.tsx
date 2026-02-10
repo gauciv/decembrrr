@@ -27,16 +27,10 @@ function initials(name: string) {
     .slice(0, 2);
 }
 
-function balanceColor(balance: number): string {
-  if (balance === 0) return "text-muted-foreground";
-  if (balance < 50) return "text-amber-500";
-  return "text-green-600";
-}
-
-function balanceDot(balance: number): string {
-  if (balance === 0) return "bg-red-500";
-  if (balance < 50) return "bg-amber-400";
-  return "bg-green-500";
+function balanceStatus(balance: number): { label: string; color: string; dot: string } {
+  if (balance <= 0) return { label: "No Balance", color: "text-red-600", dot: "bg-red-500" };
+  if (balance < 50) return { label: "Low Balance", color: "text-amber-500", dot: "bg-amber-400" };
+  return { label: "Good", color: "text-green-600", dot: "bg-green-500" };
 }
 
 function formatToday(): string {
@@ -203,18 +197,17 @@ export default function PresidentHomeTab() {
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className={`h-2 w-2 rounded-full ${balanceDot(Math.max(0, m.balance))}`} />
-                    {m.deductedToday ? (
-                      <span className={`text-sm font-semibold ${balanceColor(Math.max(0, m.balance))}`}>
-                        ₱{Math.max(0, m.balance).toFixed(2)}
-                      </span>
-                    ) : (
-                      <span className={`text-sm font-medium ${balanceColor(Math.max(0, m.balance))}`}>
-                        {m.balance <= 0
-                          ? "₱0.00"
-                          : `₱${m.balance.toFixed(2)}`}
-                      </span>
-                    )}
+                    {(() => {
+                      const status = balanceStatus(m.balance);
+                      return (
+                        <>
+                          <span className={`h-2 w-2 rounded-full ${status.dot}`} />
+                          <span className={`text-sm font-medium ${status.color}`}>
+                            {status.label}
+                          </span>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               ))}
