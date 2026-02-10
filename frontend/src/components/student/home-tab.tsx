@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/auth";
-import { getMyRecentDeductions, getMyClass, type Transaction, type ClassData } from "@/lib/api";
+import { getMyRecentDeductions, getMyClass, getNoClassDates, type Transaction, type ClassData, type NoClassDate } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { TrendingDown, Wallet } from "lucide-react";
+import { TrendingDown, Wallet, Clock } from "lucide-react";
 import { TabSkeleton } from "@/components/ui/skeleton";
 
 /**
@@ -15,6 +15,7 @@ export default function StudentHomeTab() {
   const { profile } = useAuth();
   const [deductions, setDeductions] = useState<Transaction[]>([]);
   const [classData, setClassData] = useState<ClassData | null>(null);
+  const [noClassDates, setNoClassDates] = useState<NoClassDate[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -22,6 +23,7 @@ export default function StudentHomeTab() {
     Promise.all([
       getMyRecentDeductions(profile.id).then(setDeductions),
       profile.class_id ? getMyClass(profile.class_id).then(setClassData) : Promise.resolve(),
+      profile.class_id ? getNoClassDates(profile.class_id).then(setNoClassDates) : Promise.resolve(),
     ]).finally(() => setLoading(false));
   }, [profile]);
 
@@ -47,12 +49,39 @@ export default function StudentHomeTab() {
           <p className="text-4xl font-bold text-green-700">
             ₱{displayBalance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
           </p>
-          {classData && (
-            <p className="text-sm text-muted-foreground mt-1">
-              {classData.name} · ₱{classData.daily_amount}/
-              {classData.collection_frequency === "weekly" ? "week" : "day"}
-            </p>
-          )}
+          {classData && (() => {
+            const noClassSet = new Set(noClassDates.map((d) => d.date));
+            const collectionDays = classData.collection_days ?? [1, 2, 3, 4, 5];
+            const now = new Date();
+            const nextDeduction = (() => {
+              for (let offset = 1; offset <= 14; offset++) {
+                const d = new Date(now);
+                d.setDate(d.getDate() + offset);
+                const jsDay = d.getDay();
+                const isoDay = jsDay === 0 ? 7 : jsDay;
+                const dateStr = d.toISOString().slice(0, 10);
+                if (collectionDays.includes(isoDay) && !noClassSet.has(dateStr)) return d;
+              }
+              return null;
+            })();
+            const hoursUntil = nextDeduction
+              ? Math.max(0, Math.round((nextDeduction.setHours(0, 0, 0, 0) - now.getTime()) / (1000 * 60 * 60)))
+              : null;
+            return (
+              <div className="mt-2 rounded-lg bg-green-100/60 border border-green-200/50 px-3 py-2">
+                <p className="text-xs font-medium text-green-800">{classData.name}</p>
+                <p className="text-xs text-green-700 mt-0.5">
+                  ₱{classData.daily_amount}/{classData.collection_frequency === "weekly" ? "week" : "day"}
+                  {hoursUntil !== null && (
+                    <span className="ml-1.5 inline-flex items-center gap-0.5">
+                      <Clock className="inline h-3 w-3" />
+                      Next deduction in {hoursUntil < 1 ? "<1" : hoursUntil}h
+                    </span>
+                  )}
+                </p>
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
 

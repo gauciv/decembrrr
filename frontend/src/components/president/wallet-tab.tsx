@@ -196,7 +196,8 @@ export default function PresidentWalletTab() {
       setTimeout(() => setToast(""), 4000);
 
       // Optimistic update: add to local no-class dates
-      setNoClassDates((prev) => [...prev, { id: crypto.randomUUID(), class_id: profile.class_id!, date: selectedDate, reason: reason || null }]);
+      const optimisticEntry: NoClassDate = { id: crypto.randomUUID() as string, class_id: profile.class_id!, date: selectedDate, reason: reason || "", created_at: new Date().toISOString() };
+      setNoClassDates((prev) => [...prev, optimisticEntry]);
       // Update heatmap cell to 0
       setHeatmap((prev) => {
         const next = new Map(prev);

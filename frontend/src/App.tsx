@@ -16,6 +16,7 @@ const PresidentAnalyticsPage = lazy(() => import("@/pages/president-analytics"))
 const CalendarPage = lazy(() => import("@/pages/calendar-page"));
 const StudentTransactionsPage = lazy(() => import("@/pages/student-transactions"));
 const StudentClassPage = lazy(() => import("@/pages/student-class"));
+const StudentCalendarPage = lazy(() => import("@/pages/student-calendar"));
 const JoinPage = lazy(() => import("@/pages/join"));
 
 const queryClient = new QueryClient();
@@ -83,6 +84,7 @@ function AppRoutes() {
           {/* Student routes */}
           <Route path="/transactions" element={<StudentTransactionsPage />} />
           <Route path="/class" element={<StudentClassPage />} />
+          <Route path="/student-calendar" element={<StudentCalendarPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

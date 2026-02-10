@@ -12,6 +12,7 @@ import {
   Plus,
   BarChart3,
   Wallet,
+  CalendarDays,
   type LucideIcon,
 } from "lucide-react";
 import { useState, lazy, Suspense, useEffect, useRef } from "react";
@@ -33,6 +34,7 @@ const navItems: NavItem[] = [
   { to: "/analytics", label: "Stats", icon: BarChart3, presidentOnly: true },
   { to: "/transactions", label: "Log", icon: Receipt, studentOnly: true },
   { to: "/class", label: "Class", icon: Users, studentOnly: true },
+  { to: "/student-calendar", label: "Calendar", icon: CalendarDays, studentOnly: true },
 ];
 
 function initials(name: string) {

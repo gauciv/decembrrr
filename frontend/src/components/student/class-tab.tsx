@@ -3,20 +3,16 @@ import { useAuth } from "@/context/auth";
 import {
   getMyClass,
   getClassFundSummary,
-  getClassTodayStatus,
+  getClassMembers,
   type ClassData,
 } from "@/lib/api";
+import type { Profile } from "@/context/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Target, Users, CheckCircle2, XCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Target, Users, Search, TrendingUp, TrendingDown } from "lucide-react";
 import { TabSkeleton } from "@/components/ui/skeleton";
-
-interface MemberStatus {
-  id: string;
-  name: string;
-  avatar_url: string | null;
-  paidToday: boolean;
-}
 
 function initials(name: string) {
   return name
@@ -28,13 +24,14 @@ function initials(name: string) {
 
 /**
  * Student Class Tab — shows the class fund goal progress
- * and today's payment status for each classmate.
+ * and a searchable list of all class members with balances.
  */
 export default function StudentClassTab() {
   const { profile } = useAuth();
   const [classData, setClassData] = useState<ClassData | null>(null);
   const [summary, setSummary] = useState({ totalBalance: 0, activeCount: 0, totalMembers: 0 });
-  const [members, setMembers] = useState<MemberStatus[]>([]);
+  const [members, setMembers] = useState<Profile[]>([]);
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,7 +39,7 @@ export default function StudentClassTab() {
     Promise.all([
       getMyClass(profile.class_id).then(setClassData),
       getClassFundSummary(profile.class_id).then(setSummary),
-      getClassTodayStatus(profile.class_id).then(setMembers),
+      getClassMembers(profile.class_id).then((m) => setMembers(m.sort((a, b) => a.name.localeCompare(b.name)))),
     ]).finally(() => setLoading(false));
   }, [profile]);
 
@@ -65,12 +62,14 @@ export default function StudentClassTab() {
     ? Math.min(100, (summary.totalBalance / classData.fund_goal) * 100)
     : null;
 
-  const paidCount = members.filter((m) => m.paidToday).length;
-  const unpaidMembers = members.filter((m) => !m.paidToday);
-  const paidMembers = members.filter((m) => m.paidToday);
+  const filtered = members.filter(
+    (m) =>
+      m.name.toLowerCase().includes(search.toLowerCase()) ||
+      m.email.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Fund Goal Progress */}
       <Card className="border-blue-200 bg-blue-50">
         <CardHeader className="pb-2">
@@ -110,64 +109,74 @@ export default function StudentClassTab() {
         </CardContent>
       </Card>
 
-      {/* Today's Payment Status */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Today's Status</CardTitle>
-            <span className="text-xs text-muted-foreground">
-              {paidCount}/{members.length} paid
-            </span>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {members.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No classmates to show yet.
-            </p>
-          ) : (
-            <>
-              {/* Unpaid first — these need attention */}
-              {unpaidMembers.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-red-600 uppercase tracking-wider">
-                    Haven't paid yet
-                  </p>
-                  {unpaidMembers.map((m) => (
-                    <div key={m.id} className="flex items-center gap-3 rounded-lg p-2">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={m.avatar_url || undefined} />
-                        <AvatarFallback className="text-xs">{initials(m.name)}</AvatarFallback>
-                      </Avatar>
-                      <p className="text-sm flex-1 truncate">{m.name}</p>
-                      <XCircle className="h-4 w-4 text-red-400" />
-                    </div>
-                  ))}
-                </div>
-              )}
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Search classmates…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
 
-              {/* Paid */}
-              {paidMembers.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-green-600 uppercase tracking-wider">
-                    Paid today
+      {/* Class Member List */}
+      <div className="space-y-1">
+        {filtered.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-6">
+            No classmates found
+          </p>
+        ) : (
+          filtered.map((member) => {
+            const isMe = member.id === profile.id;
+            const balance = Math.max(0, member.balance);
+            return (
+              <div
+                key={member.id}
+                className={`flex items-center gap-3 rounded-lg border p-3 ${isMe ? "bg-primary/5 border-primary/20" : ""}`}
+              >
+                <Avatar className="h-9 w-9">
+                  <AvatarImage src={member.avatar_url || undefined} />
+                  <AvatarFallback className="text-xs">
+                    {initials(member.name)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {member.name}
+                    {isMe && (
+                      <Badge variant="outline" className="ml-1.5 text-[10px] px-1.5 py-0 align-middle border-primary/30 text-primary">
+                        You
+                      </Badge>
+                    )}
+                    {member.is_president && (
+                      <Badge variant="outline" className="ml-1.5 text-[10px] px-1.5 py-0 align-middle">
+                        President
+                      </Badge>
+                    )}
                   </p>
-                  {paidMembers.map((m) => (
-                    <div key={m.id} className="flex items-center gap-3 rounded-lg p-2 opacity-70">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={m.avatar_url || undefined} />
-                        <AvatarFallback className="text-xs">{initials(m.name)}</AvatarFallback>
-                      </Avatar>
-                      <p className="text-sm flex-1 truncate">{m.name}</p>
-                      <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    </div>
-                  ))}
+                  <p
+                    className={`text-sm font-semibold ${
+                      balance <= 0
+                        ? "text-red-600"
+                        : balance < 50
+                          ? "text-amber-500"
+                          : "text-green-600"
+                    }`}
+                  >
+                    {balance <= 0 ? (
+                      <TrendingDown className="inline h-3 w-3 mr-0.5" />
+                    ) : (
+                      <TrendingUp className="inline h-3 w-3 mr-0.5" />
+                    )}
+                    ₱{balance.toFixed(2)}
+                  </p>
                 </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
