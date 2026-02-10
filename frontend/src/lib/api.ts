@@ -171,6 +171,14 @@ export async function toggleStudentActive(
   if (error) throw resolveError(error);
 }
 
+export async function removeStudentFromClass(studentId: string) {
+  const { error } = await supabase
+    .from("profiles")
+    .update({ class_id: null, is_president: false, balance: 0 })
+    .eq("id", studentId);
+  if (error) throw resolveError(error);
+}
+
 // --- Payments ---
 
 export async function recordDeposit(

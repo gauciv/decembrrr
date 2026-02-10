@@ -100,6 +100,10 @@ export default function PresidentWalletTab() {
   const [reason, setReason] = useState("");
   const [dayLoading, setDayLoading] = useState(false);
 
+  // Member list pagination
+  const [memberPage, setMemberPage] = useState(0);
+  const MEMBERS_PER_PAGE = 5;
+
   const loadData = useCallback(async () => {
     if (!profile?.class_id) return;
     setLoading(true);
@@ -140,6 +144,14 @@ export default function PresidentWalletTab() {
   );
   const contributed = filteredMembers.filter((m) => m.deductedToday);
   const missed = filteredMembers.filter((m) => !m.deductedToday);
+
+  // Paginated combined list: contributed first, then missed
+  const orderedMembers = [...contributed, ...missed];
+  const memberTotalPages = Math.max(1, Math.ceil(orderedMembers.length / MEMBERS_PER_PAGE));
+  const paginatedMembers = orderedMembers.slice(memberPage * MEMBERS_PER_PAGE, (memberPage + 1) * MEMBERS_PER_PAGE);
+
+  // Reset page when search changes
+  useEffect(() => { setMemberPage(0); }, [txnSearch]);
 
   // Calendar navigation
   function prevMonth() {
@@ -182,8 +194,20 @@ export default function PresidentWalletTab() {
         : "Marked as no-class";
       setToast(msg);
       setTimeout(() => setToast(""), 4000);
+
+      // Optimistic update: add to local no-class dates
+      setNoClassDates((prev) => [...prev, { id: crypto.randomUUID(), class_id: profile.class_id!, date: selectedDate, reason: reason || null }]);
+      // Update heatmap cell to 0
+      setHeatmap((prev) => {
+        const next = new Map(prev);
+        next.set(selectedDate, 0);
+        return next;
+      });
       setSelectedDate(null);
-      await Promise.all([loadData(), loadHeatmap()]);
+
+      // Background refresh for accurate data
+      loadData().catch(() => {});
+      loadHeatmap().catch(() => {});
     } catch (err) {
       setToast(getErrorMessage(err));
       setTimeout(() => setToast(""), 4000);
@@ -201,8 +225,14 @@ export default function PresidentWalletTab() {
       await removeNoClassDate(ncd.id);
       setToast("Removed no-class mark");
       setTimeout(() => setToast(""), 3000);
+
+      // Optimistic update: remove from local no-class dates
+      setNoClassDates((prev) => prev.filter((d) => d.id !== ncd.id));
       setSelectedDate(null);
-      await Promise.all([loadData(), loadHeatmap()]);
+
+      // Background refresh for accurate data
+      loadData().catch(() => {});
+      loadHeatmap().catch(() => {});
     } catch (err) {
       setToast(getErrorMessage(err));
       setTimeout(() => setToast(""), 4000);
@@ -310,11 +340,11 @@ export default function PresidentWalletTab() {
           </div>
         </CardHeader>
         <CardContent className="pt-0">
-          <div className="max-h-64 overflow-y-auto space-y-0.5">
-            {/* Contributed */}
-            {contributed.length > 0 && (
-              <div className="space-y-0.5">
-                {contributed.map((m) => (
+          <div className="min-h-[280px] space-y-0.5">
+            {paginatedMembers.length > 0 ? (
+              paginatedMembers.map((m) => {
+                const isPaid = m.deductedToday;
+                return (
                   <div key={m.id} className="flex items-center gap-2.5 rounded-lg p-2 hover:bg-muted/50">
                     <Avatar className="h-7 w-7">
                       <AvatarImage src={m.avatar_url || undefined} />
@@ -323,40 +353,43 @@ export default function PresidentWalletTab() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{m.name}</p>
                     </div>
-                    <span className="flex items-center gap-1 text-xs text-green-600 font-medium shrink-0">
-                      <CheckCircle2 className="h-3 w-3" />
-                      Paid
+                    <span className={`flex items-center gap-1 text-xs font-medium shrink-0 ${isPaid ? "text-green-600" : "text-red-500"}`}>
+                      {isPaid ? <><CheckCircle2 className="h-3 w-3" /> Paid</> : <><XCircle className="h-3 w-3" /> Missed</>}
                     </span>
                   </div>
-                ))}
-              </div>
-            )}
-            {/* Missed */}
-            {missed.length > 0 && (
-              <div className="space-y-0.5">
-                {missed.map((m) => (
-                  <div key={m.id} className="flex items-center gap-2.5 rounded-lg p-2 hover:bg-muted/50">
-                    <Avatar className="h-7 w-7">
-                      <AvatarImage src={m.avatar_url || undefined} />
-                      <AvatarFallback className="text-[10px]">{initials(m.name)}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{m.name}</p>
-                    </div>
-                    <span className="flex items-center gap-1 text-xs text-red-500 font-medium shrink-0">
-                      <XCircle className="h-3 w-3" />
-                      Missed
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {filteredMembers.length === 0 && (
+                );
+              })
+            ) : (
               <p className="text-sm text-muted-foreground text-center py-4">
                 No members found
               </p>
             )}
           </div>
+          {memberTotalPages > 1 && (
+            <div className="flex items-center justify-between pt-2 border-t mt-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMemberPage((p) => Math.max(0, p - 1))}
+                disabled={memberPage === 0}
+                className="h-7 text-xs"
+              >
+                <ChevronLeft className="h-3.5 w-3.5 mr-0.5" /> Prev
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {memberPage + 1} / {memberTotalPages}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMemberPage((p) => Math.min(memberTotalPages - 1, p + 1))}
+                disabled={memberPage >= memberTotalPages - 1}
+                className="h-7 text-xs"
+              >
+                Next <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

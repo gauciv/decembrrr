@@ -3,7 +3,6 @@ import { useAuth } from "@/context/auth";
 import {
   getWeeklyAnalytics,
   getMyClass,
-  getClassFundSummary,
   getNoClassDates,
   type ClassData,
   type NoClassDate,

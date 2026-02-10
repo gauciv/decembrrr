@@ -9,6 +9,7 @@ import {
   buildStudentEmailUri,
   updateClass,
   deleteClass,
+  removeStudentFromClass,
   type Transaction,
   type ClassData,
   type UpdateClassInput,
@@ -38,6 +39,9 @@ import {
   Pencil,
   Check,
   Trash2,
+  ChevronLeft,
+  ChevronRight,
+  UserMinus,
 } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
 import { TabSkeleton } from "@/components/ui/skeleton";
@@ -66,6 +70,8 @@ export default function PresidentClassTab() {
   // Student log dialog
   const [logStudent, setLogStudent] = useState<Profile | null>(null);
   const [logTxns, setLogTxns] = useState<Transaction[]>([]);
+  const [logPage, setLogPage] = useState(0);
+  const LOG_PER_PAGE = 5;
 
   // Invite dialog
   const [showInvite, setShowInvite] = useState(false);
@@ -89,6 +95,10 @@ export default function PresidentClassTab() {
   // Email
   const [emailLoading, setEmailLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+
+  // Remove student
+  const [removeTarget, setRemoveTarget] = useState<Profile | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!profile?.class_id) return;
@@ -141,6 +151,7 @@ export default function PresidentClassTab() {
 
   async function openStudentLog(student: Profile) {
     setLogStudent(student);
+    setLogPage(0);
     const txns = await getMyTransactions(student.id, 30);
     setLogTxns(txns);
   }
@@ -154,21 +165,32 @@ export default function PresidentClassTab() {
 
   async function copyQrImage() {
     if (!classData?.invite_code) return;
+    const joinUrl = `${window.location.origin}/join?code=${classData.invite_code}`;
     try {
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(
-        `${window.location.origin}/join?code=${classData.invite_code}`
-      )}`;
-      const response = await fetch(qrUrl);
-      const blob = await response.blob();
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(joinUrl)}`;
+      // Use ClipboardItem with a Promise-based blob to maintain user activation
       await navigator.clipboard.write([
-        new ClipboardItem({ "image/png": blob }),
+        new ClipboardItem({
+          "image/png": fetch(qrUrl).then((r) => r.blob()),
+        }),
       ]);
       setQrCopied(true);
       setTimeout(() => setQrCopied(false), 2000);
     } catch {
-      navigator.clipboard.writeText(
-        `${window.location.origin}/join?code=${classData.invite_code}`
-      );
+      // Fallback: copy URL as text
+      try {
+        await navigator.clipboard.writeText(joinUrl);
+      } catch {
+        // Last resort: use deprecated execCommand
+        const ta = document.createElement("textarea");
+        ta.value = joinUrl;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
       setQrCopied(true);
       setTimeout(() => setQrCopied(false), 2000);
     }
@@ -239,6 +261,24 @@ export default function PresidentClassTab() {
       setTimeout(() => setToast(""), 4000);
     } finally {
       setEmailLoading(false);
+    }
+  }
+
+  async function handleRemoveStudent() {
+    if (!removeTarget) return;
+    setRemoving(true);
+    try {
+      await removeStudentFromClass(removeTarget.id);
+      setToast(`${removeTarget.name} removed from class`);
+      setRemoveTarget(null);
+      setLogStudent(null);
+      await loadData();
+      setTimeout(() => setToast(""), 3000);
+    } catch (err) {
+      setToast(getErrorMessage(err));
+      setTimeout(() => setToast(""), 4000);
+    } finally {
+      setRemoving(false);
     }
   }
 
@@ -463,58 +503,136 @@ export default function PresidentClassTab() {
 
           {/* Email Button */}
           {logStudent && (
-            <div className="pt-2">
+            <div className="pt-2 flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full"
+                className="flex-1"
                 disabled={emailLoading}
                 onClick={() => sendStudentEmail(logStudent)}
               >
                 <Mail className="h-4 w-4 mr-1.5" />
-                {emailLoading ? "Preparing…" : "Email Payment Summary"}
+                {emailLoading ? "Preparing…" : "Email Summary"}
               </Button>
+              {logStudent.id !== profile?.id && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                  onClick={() => setRemoveTarget(logStudent)}
+                >
+                  <UserMinus className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           )}
 
-          <div className="max-h-80 overflow-y-auto space-y-1 pt-2">
+          <div className="min-h-[260px] space-y-1 pt-2">
             {logTxns.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
                 No transactions yet
               </p>
             ) : (
-              logTxns.map((txn, i) => (
-                <div key={txn.id}>
-                  {i > 0 && <Separator className="my-2" />}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm">{txn.note || txn.type}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(txn.created_at).toLocaleDateString("en-PH", {
-                          month: "short",
-                          day: "numeric",
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
-                    <Badge
-                      variant={
-                        txn.type === "deposit" ? "default" : "secondary"
-                      }
-                      className={
-                        txn.type === "deposit"
-                          ? "bg-green-600"
-                          : "bg-red-100 text-red-700"
-                      }
-                    >
-                      {txn.type === "deposit" ? "+" : "-"}₱
-                      {txn.amount.toFixed(2)}
-                    </Badge>
-                  </div>
-                </div>
-              ))
+              (() => {
+                const logTotalPages = Math.max(1, Math.ceil(logTxns.length / LOG_PER_PAGE));
+                const paginatedTxns = logTxns.slice(logPage * LOG_PER_PAGE, (logPage + 1) * LOG_PER_PAGE);
+                return (
+                  <>
+                    {paginatedTxns.map((txn, i) => (
+                      <div key={txn.id}>
+                        {i > 0 && <Separator className="my-2" />}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm">{txn.note || txn.type}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(txn.created_at).toLocaleDateString("en-PH", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                          </div>
+                          <Badge
+                            variant={
+                              txn.type === "deposit" ? "default" : "secondary"
+                            }
+                            className={
+                              txn.type === "deposit"
+                                ? "bg-green-600"
+                                : "bg-red-100 text-red-700"
+                            }
+                          >
+                            {txn.type === "deposit" ? "+" : "-"}₱
+                            {txn.amount.toFixed(2)}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                    {logTotalPages > 1 && (
+                      <div className="flex items-center justify-between pt-2 border-t mt-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setLogPage((p) => Math.max(0, p - 1))}
+                          disabled={logPage === 0}
+                          className="h-7 text-xs"
+                        >
+                          <ChevronLeft className="h-3.5 w-3.5 mr-0.5" /> Prev
+                        </Button>
+                        <span className="text-xs text-muted-foreground">
+                          {logPage + 1} / {logTotalPages}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setLogPage((p) => Math.min(logTotalPages - 1, p + 1))}
+                          disabled={logPage >= logTotalPages - 1}
+                          className="h-7 text-xs"
+                        >
+                          Next <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                );
+              })()
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove Student Confirmation Dialog */}
+      <Dialog open={!!removeTarget} onOpenChange={() => setRemoveTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <UserMinus className="h-5 w-5" />
+              Remove Student
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove <span className="font-semibold">{removeTarget?.name}</span> from the class? Their balance will be reset to ₱0.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+              <p className="text-xs text-red-700">
+                This student will be removed from the class and will need to rejoin using the invite code. Their transaction history will be preserved.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setRemoveTarget(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                disabled={removing}
+                onClick={handleRemoveStudent}
+              >
+                {removing ? "Removing…" : "Remove Student"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
