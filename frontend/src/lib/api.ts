@@ -914,3 +914,101 @@ export async function getMyTransactionDates(
 
   return dateMap;
 }
+
+// --- Bug Reports ---
+
+export interface BugReport {
+  id: string;
+  reporter_id: string;
+  reporter_name: string;
+  reporter_email: string;
+  category: "ui" | "payment" | "account" | "performance" | "other";
+  severity: "low" | "medium" | "high" | "critical";
+  title: string;
+  description: string;
+  steps_to_reproduce: string | null;
+  expected_behavior: string | null;
+  device_info: string | null;
+  screenshot_urls: string[];
+  status: "open" | "in-progress" | "resolved" | "closed";
+  admin_notes: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+export interface SubmitBugReportInput {
+  category: BugReport["category"];
+  severity: BugReport["severity"];
+  title: string;
+  description: string;
+  steps_to_reproduce?: string;
+  expected_behavior?: string;
+  screenshot_urls?: string[];
+}
+
+/** Upload a bug report screenshot to storage and return its public URL */
+export async function uploadBugScreenshot(file: File): Promise<string> {
+  const ext = file.name.split(".").pop() || "png";
+  const path = `${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage
+    .from("bug-screenshots")
+    .upload(path, file, { contentType: file.type });
+  if (error) throw resolveError(error);
+  const { data } = supabase.storage.from("bug-screenshots").getPublicUrl(path);
+  return data.publicUrl;
+}
+
+/** Submit a new bug report */
+export async function submitBugReport(input: SubmitBugReportInput) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new AppError(ErrorCode.AUTH_PROFILE_NOT_FOUND);
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("name, email")
+    .eq("id", user.id)
+    .single();
+
+  const deviceInfo = `${navigator.userAgent} | ${window.innerWidth}x${window.innerHeight}`;
+
+  const { error } = await supabase.from("bug_reports").insert({
+    reporter_id: user.id,
+    reporter_name: profile?.name ?? "Unknown",
+    reporter_email: profile?.email ?? user.email ?? "Unknown",
+    category: input.category,
+    severity: input.severity,
+    title: input.title,
+    description: input.description,
+    steps_to_reproduce: input.steps_to_reproduce || null,
+    expected_behavior: input.expected_behavior || null,
+    device_info: deviceInfo,
+    screenshot_urls: input.screenshot_urls ?? [],
+  });
+  if (error) throw resolveError(error);
+}
+
+/** Fetch all bug reports (admin — president only) */
+export async function getAllBugReports() {
+  const { data, error } = await supabase
+    .from("bug_reports")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw resolveError(error);
+  return data as BugReport[];
+}
+
+/** Update bug report status / admin notes (president only) */
+export async function updateBugReport(
+  reportId: string,
+  updates: { status?: BugReport["status"]; admin_notes?: string }
+) {
+  const payload: Record<string, unknown> = { ...updates };
+  if (updates.status === "resolved" || updates.status === "closed") {
+    payload.resolved_at = new Date().toISOString();
+  }
+  const { error } = await supabase
+    .from("bug_reports")
+    .update(payload)
+    .eq("id", reportId);
+  if (error) throw resolveError(error);
+}

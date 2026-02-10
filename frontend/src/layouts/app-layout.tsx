@@ -13,9 +13,12 @@ import {
   BarChart3,
   Wallet,
   CalendarDays,
+  Bug,
   type LucideIcon,
 } from "lucide-react";
 import { useState, lazy, Suspense, useEffect, useRef } from "react";
+
+const BugReportDialog = lazy(() => import("@/components/bug-report-dialog"));
 
 const ScanFlow = lazy(() => import("@/components/president/scan-flow"));
 
@@ -49,6 +52,7 @@ export default function AppLayout() {
   const { profile, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const [bugOpen, setBugOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close menu when clicking outside
@@ -121,6 +125,19 @@ export default function AppLayout() {
                   </div>
 
                   <Separator />
+
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    size="sm"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setBugOpen(true);
+                    }}
+                  >
+                    <Bug className="h-4 w-4 mr-2" />
+                    Report Bug
+                  </Button>
 
                   <Button
                     variant="outline"
@@ -230,6 +247,10 @@ export default function AppLayout() {
           <ScanFlow open={scanOpen} onOpenChange={setScanOpen} />
         </Suspense>
       )}
+
+      <Suspense>
+        <BugReportDialog open={bugOpen} onOpenChange={setBugOpen} />
+      </Suspense>
     </div>
   );
 }
