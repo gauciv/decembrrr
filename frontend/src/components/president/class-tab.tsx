@@ -76,6 +76,8 @@ export default function PresidentClassTab() {
   const [editName, setEditName] = useState("");
   const [editDaily, setEditDaily] = useState("");
   const [editGoal, setEditGoal] = useState("");
+  const [editDateInitiated, setEditDateInitiated] = useState("");
+  const [editCollectionDays, setEditCollectionDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [saving, setSaving] = useState(false);
 
   // Delete dialog
@@ -171,6 +173,8 @@ export default function PresidentClassTab() {
     setEditName(classData.name);
     setEditDaily(String(classData.daily_amount));
     setEditGoal(classData.fund_goal ? String(classData.fund_goal) : "");
+    setEditDateInitiated(classData.date_initiated ?? "");
+    setEditCollectionDays(classData.collection_days ?? [1, 2, 3, 4, 5]);
     setShowEdit(true);
   }
 
@@ -183,6 +187,9 @@ export default function PresidentClassTab() {
       if (editDaily && parseFloat(editDaily) !== classData.daily_amount) input.dailyAmount = parseFloat(editDaily);
       const goalVal = editGoal ? parseFloat(editGoal) : null;
       if (goalVal !== classData.fund_goal) input.fundGoal = goalVal;
+      if (editDateInitiated && editDateInitiated !== classData.date_initiated) input.dateInitiated = editDateInitiated;
+      const prevDays = classData.collection_days ?? [1, 2, 3, 4, 5];
+      if (JSON.stringify([...editCollectionDays].sort()) !== JSON.stringify([...prevDays].sort())) input.collectionDays = editCollectionDays;
 
       if (Object.keys(input).length > 0) {
         await updateClass(profile.class_id, input);
@@ -607,6 +614,41 @@ export default function PresidentClassTab() {
               <label className="text-sm font-medium">Fund Goal (₱)</label>
               <Input type="number" value={editGoal} onChange={(e) => setEditGoal(e.target.value)} placeholder="Leave empty for no goal" min="0" />
               <p className="text-xs text-muted-foreground mt-1">Leave empty for no target goal</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Date Initiated</label>
+              <Input type="date" value={editDateInitiated} onChange={(e) => setEditDateInitiated(e.target.value)} />
+              <p className="text-xs text-muted-foreground mt-1">When the class fund started collecting</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Collection Days</label>
+              <div className="flex gap-1.5 mt-1.5">
+                {([
+                  [1, "Mon"], [2, "Tue"], [3, "Wed"], [4, "Thu"],
+                  [5, "Fri"], [6, "Sat"], [7, "Sun"],
+                ] as const).map(([day, label]) => {
+                  const active = editCollectionDays.includes(day);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${
+                        active
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                      onClick={() =>
+                        setEditCollectionDays((prev) =>
+                          active ? prev.filter((d) => d !== day) : [...prev, day].sort()
+                        )
+                      }
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Days when deductions are collected</p>
             </div>
             <Button className="w-full" onClick={handleSaveEdit} disabled={saving || !editName.trim()}>
               {saving ? "Saving…" : "Save Changes"}
