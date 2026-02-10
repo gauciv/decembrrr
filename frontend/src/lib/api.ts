@@ -640,6 +640,37 @@ export async function getMonthlyHeatmap(classId: string, year: number, month: nu
   return { heatmap, totalMembers };
 }
 
+/** Personal student calendar: returns the set of dates the student has a deposit */
+export async function getStudentMonthlyCalendar(
+  profileId: string,
+  classId: string,
+  year: number,
+  month: number
+) {
+  const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+  const endDate =
+    month === 12
+      ? `${year + 1}-01-01`
+      : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("created_at")
+    .eq("profile_id", profileId)
+    .eq("class_id", classId)
+    .eq("type", "deposit")
+    .gte("created_at", startDate)
+    .lt("created_at", endDate);
+
+  if (error) throw resolveError(error);
+
+  const paidDates = new Set<string>();
+  for (const txn of data as Array<{ created_at: string }>) {
+    paidDates.add(txn.created_at.slice(0, 10));
+  }
+  return paidDates;
+}
+
 /** Look up a student by their profile ID (for QR scan) */
 export async function getStudentById(studentId: string) {
   const { data, error } = await supabase.rpc("lookup_student", {
